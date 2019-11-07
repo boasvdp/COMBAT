@@ -1,0 +1,4 @@
+channels:
+- bioconda
+dependencies:
+- maskrc-svg=0.5

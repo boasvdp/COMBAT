@@ -1,0 +1,8 @@
+channels:
+- bioconda
+- r
+- defaults
+- conda-forge
+dependencies:
+- iqtree=1.6.12
+- snp-sites=2.5.1
