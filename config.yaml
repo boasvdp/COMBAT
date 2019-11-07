@@ -1,0 +1,31 @@
+fastp:
+ compression_level: "9"
+ general: "--disable_length_filtering"
+
+kraken:
+ general: "--output - --fastq-input --gzip-compressed --paired"
+ db: "/home/vdputten/kraken_db_nohuman"
+
+spades:
+ spades: "--only-assembler --careful"
+ removesmalls_length: "500"
+
+abricate:
+ minid: "90"
+ mincov: "60"
+ ncbi: "ncbi"
+ vfdb: "vfdb"
+ plasmidfinder: "plasmidfinder"
+ ecoh: "ecoh"
+
+prokka:
+ general: "--usegenus"
+ kingdom: "Bacteria"
+ genus: "Escherichia"
+ species: "coli"
+
+snippy:
+ general: "--force --cleanup"
+
+snippycore:
+ prefix: "COMBAT"

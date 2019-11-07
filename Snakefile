@@ -1,19 +1,21 @@
-IDS, = glob_wildcards("raw_reads/{id}_1.fastq.gz")
-#IDS = [ "COMB0052", "COMB0053" ]
+configfile: "config.yaml"
+
+#IDS, = glob_wildcards("raw_reads/{id}_1.fastq.gz")
+IDS = [ "COMB0052", "COMB0053" ]
 
 rule all:
 	input:
 		expand("kraken_out/{sample}_kraken2_report.txt", sample=IDS),
 		expand("quast_out/{sample}", sample=IDS),
-		expand("abricate_out/ncbi/{sample}_card.tsv", sample=IDS),
+		expand("abricate_out/ncbi/{sample}_ncbi.tsv", sample=IDS),
 		expand("mlst/{sample}.tsv", sample=IDS),
 		expand("prokka_out/{sample}", sample=IDS),
-		expand("ezclermont/{sample}.tsv", sample=IDS),
+		expand("ezclermont_out/{sample}.tsv", sample=IDS),
 		"multiqc_out/multiqc_fastp.html",
 		"summary/summary.csv",
 		"abricate_summary/summary_ncbi.tsv",
 		expand("snippy_out/{sample}", sample=IDS),
-		"snippy-core_out"
+		"masked.aln"
 
 rule fastp:
 	input:
@@ -27,14 +29,13 @@ rule fastp:
 	conda:
 		"envs/fastp.yaml"
 	params:
-		path = "/home/vdputten/.conda/envs/my_root/bin",
-		compression_level = "9",
-		general = "--disable_length_filtering"
+		compression_level = config["fastp"]["compression_level"],
+		general = config["fastp"]["general"]
 	log:
 		"logs/fastp/{sample}.log"
 	threads: 8
 	shell:
-		"{params.path}/fastp -w {threads} -z {params.compression_level} -i {input.fw} -o {output.fw} -I {input.rv} -O {output.rv} {params.general} --html {output.html} --json {output.json} 2>&1>{log}"
+		"fastp -w {threads} -z {params.compression_level} -i {input.fw} -o {output.fw} -I {input.rv} -O {output.rv} {params.general} --html {output.html} --json {output.json} 2>&1>{log}"
 
 rule kraken2:
 	input:
@@ -45,14 +46,13 @@ rule kraken2:
 	conda:
 		"envs/kraken.yaml"
 	params:
-		path = "/home/vdputten/.conda/envs/my_root/bin",
-		general = "--output - --fastq-input --gzip-compressed --paired",
-		db = "/home/vdputten/kraken_db_nohuman"
+		general = config["kraken"]["general"],
+		db = config["kraken"]["db"]
 	log:
 		"logs/kraken2/{sample}.log"
 	threads: 8
 	shell:
-		"{params.path}/kraken2 --db {params.db} {params.general} --threads {threads} --report {output.report} {input.fw} {input.rv} 2>&1>{log}"
+		"kraken2 --db {params.db} {params.general} --threads {threads} --report {output.report} {input.fw} {input.rv} 2>&1>{log}"
 
 rule spades:
 	input:
@@ -62,15 +62,15 @@ rule spades:
 		assembly = "genomes/{sample}.fasta",
 		tar_archive = "spades_out/{sample}.tar.gz"
 	params:
-		intermediate = "{sample}"
-		spades = "--only-assembler --careful",
-		removesmalls_length = "500"
+		intermediate = "{sample}",
+		spades = config["spades"]["spades"],
+		removesmalls_length = config["spades"]["removesmalls_length"]
 	log:
 		"logs/spades/{sample}.log"
 	threads: 16
 	shell:
 		"""
-		{params.path}/spades.py -1 {input.fw} -2 {input.rv} -o ${{TMPDIR}}/{params.intermediate} {params.spades} --threads {threads} 2>&1>{log}
+		spades.py -1 {input.fw} -2 {input.rv} -o ${{TMPDIR}}/{params.intermediate} {params.spades} --threads {threads} 2>&1>{log}
 		perl scripts/removesmalls.pl {params.removesmalls_length} ${{TMPDIR}}/{params.intermediate}/contigs.fasta > {output.assembly}
 		tar zcvf {output.tar_archive} ${{TMPDIR}}/{params.intermediate}
 		"""
@@ -101,12 +101,12 @@ rule abricate:
 	conda:
 		"envs/abricate.yaml"
 	params:
-		minid = "90",
-		mincov = "60",
-		ncbi = "ncbi",
-		vfdb = "vfdb",
-		plasmidfinder = "plasmidfinder",
-		ecoh = "ecoh"
+		minid = config["abricate"]["minid"],
+		mincov = config["abricate"]["mincov"],
+		ncbi = config["abricate"]["ncbi"],
+		vfdb = config["abricate"]["vfdb"],
+		plasmidfinder = config["abricate"]["plasmidfinder"],
+		ecoh = config["abricate"]["ecoh"]
 	log:
 		"logs/abricate/{sample}.log"
 	threads: 8
@@ -136,20 +136,19 @@ rule prokka:
 	input:
 		"genomes/{sample}.fasta"
 	output:
-		directory("prokka_out/spades/{sample}")
+		directory("prokka_out/{sample}")
 	params:
-		general = "--usegenus",
-		kingdom = "Bacteria",
-		genus = "Escherichia",
-		species = "coli",
-		outdir_spades = "prokka_out/{sample}",
+		general = config["prokka"]["general"],
+		kingdom = config["prokka"]["kingdom"],
+		genus = config["prokka"]["genus"],
+		species = config["prokka"]["species"],
 		prefix = "{sample}"
 	log:
 		"logs/prokka/{sample}.log"
 	threads: 8
 	shell:
 		"""
-		prokka {params.general} --force --outdir {params.outdir} --genus {params.genus} --species {params.species} --kingdom {params.kingdom} --cpus {threads} --prefix {params.prefix} {input} 2>&1>{log}
+		prokka {params.general} --force --outdir {output} --genus {params.genus} --species {params.species} --kingdom {params.kingdom} --cpus {threads} --prefix {params.prefix} {input} 2>&1>{log}
 		if [ -f {output}/*.gff ]; then echo "{output} exists"; else exit 1; fi
 		"""
 
@@ -178,7 +177,7 @@ rule multiqc:
 		quast_data = directory("multiqc_out/multiqc_quast_data")
 	log:
 		fastp = "logs/multiqc_fastp.log",
-		quast_spades = "logs/multiqc_quast.log"
+		quast = "logs/multiqc_quast.log"
 	shell:
 		"""
 		OUTPUT={output.fastp}
@@ -197,17 +196,18 @@ rule multiqc:
 rule summary:
 	input:
 		kraken = expand("kraken_out/{sample}_kraken2_report.txt", sample=IDS),
-		quastspades = expand("quast_out/spades/{sample}", sample=IDS),
-		quastskesa = expand("quast_out/skesa/{sample}", sample=IDS),
-		abricate = expand("abricate_out/card/{sample}_card.tsv", sample=IDS),
+		quast = expand("quast_out/{sample}", sample=IDS),
+		abricate = expand("abricate_out/ncbi/{sample}_ncbi.tsv", sample=IDS),
 		mlst = expand("mlst/{sample}.tsv", sample=IDS),
-		prokka = expand("prokka_out/spades/{sample}_spades", sample=IDS),
-		clermontyper = expand("clermontyper_out/{sample}", sample=IDS)
+		prokka = expand("prokka_out/{sample}", sample=IDS),
+		ezclermont = expand("ezclermont_out/{sample}.tsv", sample=IDS)
 	output:
 		"summary/summary.csv"
+	log:
+		"logs/summary.log"
 	shell:
 		"""
-		bash scripts/summary_isolates.sh {input.quastspades} > {output}
+		bash scripts/summary_isolates.sh {input.quast} > {output} 2>{log}
 		"""
 
 rule abricate_summary:
@@ -221,13 +221,15 @@ rule abricate_summary:
 		vfdb = "abricate_summary/summary_vfdb.tsv",
 		ecoh = "abricate_summary/summary_ecoh.tsv",
 		plasmidfinder = "abricate_summary/summary_plasmidfinder.tsv"
+	log:
+		"logs/abricate_summary.log"
 	shell:
 		"""
 		mkdir -p abricate_summary
-		abricate --summary {input.ncbi} > {output.ncbi}
-		abricate --summary {input.vfdb} > {output.vfdb}
-		abricate --summary {input.ecoh} > {output.ecoh}
-		abricate --summary {input.plasmidfinder} > {output.plasmidfinder}
+		abricate --summary {input.ncbi} > {output.ncbi} 2>>{log}
+		abricate --summary {input.vfdb} > {output.vfdb} 2>>{log}
+		abricate --summary {input.ecoh} > {output.ecoh} 2>>{log}
+		abricate --summary {input.plasmidfinder} > {output.plasmidfinder} 2>>{log}
 		"""
 
 rule snippy:
@@ -239,12 +241,14 @@ rule snippy:
 		directory("snippy_out/{sample}")
 	conda:
 		"envs/snippy.yaml"
+	params:
+		general = config["snippy"]["general"]
 	log:
 		"logs/snippy/{sample}.log"
 	threads: 8
 	shell:
 		"""
-		snippy --force --cpus {threads} --outdir {output} --ref {input.ref} --pe1 {input.fw} --pe2 {input.rv} 2>{log}
+		snippy {params.general} --cpus {threads} --outdir {output} --ref {input.ref} --pe1 {input.fw} --pe2 {input.rv} 2>{log}
 		"""
 
 rule snippycore:
@@ -252,18 +256,70 @@ rule snippycore:
 		data = expand("snippy_out/{sample}", sample=IDS),
 		ref = "references/ATCC25922.gbk"
 	output:
-		directory("snippy-core_out")
+		"snippy-core_out/core.full.aln"
 	conda:
 		"envs/snippy.yaml"
 	params:
-		prefix = "COMBAT"
+		outdir = "snippy-core_out"
+	log:
+		"logs/snippycore.log"
 	shell:
 		"""
-		snippy-core --ref {input.ref} --prefix {params.prefix} {input.data}
+		mkdir -p {params.outdir}
+		snippy-core --ref {input.ref} {input.data} 2>&1>{log}
+		mv core.aln core.full.aln core.tab core.vcf core.txt core.ref.fa {params.outdir}
 		"""
 
-rule clonalframeml
+rule iqtree:
+	input:
+		"snippy-core_out/core.full.aln"
+	output:
+		"iqtree_out/COMBAT.treefile"
+	conda:
+		"envs/iqtree_snp-sites.yaml"
+	params:
+		outdir = "iqtree_out",
+		prefix = "COMBAT"
+	log:
+		"logs/iqtree.log"
+	shell:
+		"""
+		mkdir -p {params.outdir} && cd {params.outdir}
+		iqtree -fconst $(snp-sites -C ../{input}) -nt AUTO -pre {params.prefix} -s <(snp-sites -c ../{input})
+		"""
 
-rule snippy_three_groups
+rule clonalframeml:
+	input:
+		tree = "iqtree_out/COMBAT.treefile",
+		aln = "snippy-core_out/core.full.aln"
+	output:
+		"clonalframeml_out"
+	conda:
+		"envs/clonalframeml.yaml"
+	params:
+		prefix = "COMBAT_clonalframeml"
+	log:
+		"logs/clonalframeml.log"
+	shell:
+		"""
+		mkdir -p {output} && cd {output}
+		ClonalFrameML {input.tree} {input.aln} {params.prefix} 2>&1>{log}
+		"""
 
-
+rule maskrc:
+	input:
+		aln = "snippy-core_out/core.full.aln",
+		cfml = "clonalframeml_out"
+	output:
+		"masked.aln"
+	conda:
+		"envs/maskrc.yaml"
+	params:
+		prefix = "COMBAT_clonalframeml"
+	log:
+		"logs/maskrc.log"
+	shell:
+		"""
+		cd clonalframeml_out
+		maskrc-svg.py --aln ../{input.aln} --out {output} {params.prefix} 2>&1>{log}
+		"""
