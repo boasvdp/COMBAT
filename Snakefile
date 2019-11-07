@@ -1,7 +1,7 @@
 configfile: "config.yaml"
 
 #IDS, = glob_wildcards("raw_reads/{id}_1.fastq.gz")
-IDS = [ "COMB0052", "COMB0053" ]
+IDS = [ "COMB0108", "COMB0109" ]
 
 rule all:
 	input:

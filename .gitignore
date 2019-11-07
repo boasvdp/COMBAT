@@ -4,3 +4,4 @@ raw_reads
 all_reads
 list
 list_strains
+snakemake.job
