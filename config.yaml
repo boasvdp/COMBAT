@@ -6,9 +6,12 @@ kraken:
  general: "--output - --fastq-input --gzip-compressed --paired"
  db: "/home/vdputten/kraken_db_nohuman"
 
-spades:
- spades: "--only-assembler --careful"
- removesmalls_length: "500"
+shovill:
+ minlen: "500"
+ ram: "64"
+ depth: "100"
+ assembler: "spades"
+ tmpdir: "$TMPDIR"
 
 abricate:
  minid: "90"
@@ -17,6 +20,9 @@ abricate:
  vfdb: "vfdb"
  plasmidfinder: "plasmidfinder"
  ecoh: "ecoh"
+
+amrfinder:
+ organism: "Escherichia"
 
 prokka:
  general: "--usegenus"
@@ -29,3 +35,10 @@ snippy:
 
 snippycore:
  prefix: "COMBAT"
+
+iqtree:
+ prefix: "COMBAT"
+
+filtlong:
+ target_bases: "500000000"
+ keep_percent: "100"
