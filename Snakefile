@@ -20,7 +20,8 @@ rule all:
 		expand("snippy_out/{sample}", sample=ILLUMINA),
 		"masked.aln",
 		expand("fastqc_out/{sample}", sample=NANOPORE),
-		expand("unicycler_out/{sample}/assembly.fasta", sample=NANOPORE)
+		expand("unicycler_out/{sample}/assembly.fasta", sample=NANOPORE),
+		"snp_comparisons.tsv"
 
 rule fastp:
 	input:
@@ -413,4 +414,18 @@ rule unicycler:
 	shell:
 		"""
 		unicycler -1 {input.fw} -2 {input.rv} --long {input.nanopore} -o {params.outdir} --threads {threads}
+		"""
+
+rule snp_comparisons:
+	input:
+		"masked.aln"
+	output:
+		"snp_comparisons.tsv"
+	conda:
+		"envs/snp_comparisons.yaml"
+	log:
+		"logs/snp_comparisons"
+	shell:
+		"""
+		bash scripts/snp_comparisons.sh {output}
 		"""

@@ -4,6 +4,7 @@ all_reads
 amrfinder_out
 clonalframeml_out
 COMBAT_metadata.csv
+COMBAT_metadata.tsv
 ezclermont_out
 fastp_out
 fastqc_out
@@ -16,6 +17,7 @@ logs
 *.aln
 mlst
 multiqc_out
+out
 prokka_out
 quast_out
 raw_illumina
