@@ -1,4 +1,4 @@
 channels:
 - bioconda
 dependencies:
-- amrfinderplus=3.2.3
+- ncbi-amrfinderplus=3.2.3

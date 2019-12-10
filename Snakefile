@@ -1,9 +1,9 @@
 configfile: "config.yaml"
 
-#NANOPORE, = glob_wildcards("raw_nanopore/{id}_1.fastq.gz")
-#ILLUMINA, = glob_wildcards("raw_illumina/{id}_1.fastq.gz")
-ILLUMINA = [ "COMB0108", "COMB0109" ]
-NANOPORE = [ "COMB0108" ]
+NANOPORE, = glob_wildcards("raw_nanopore/{id}_1.fastq.gz")
+ILLUMINA, = glob_wildcards("raw_illumina/{id}_1.fastq.gz")
+#ILLUMINA = [ "COMB0108", "COMB0109" ]
+#NANOPORE = [ "COMB0108" ]
 
 rule all:
 	input:
@@ -24,8 +24,8 @@ rule all:
 
 rule fastp:
 	input:
-		fw = "raw_reads/{sample}_1.fastq.gz",
-		rv = "raw_reads/{sample}_2.fastq.gz"
+		fw = "raw_illumina/{sample}_1.fastq.gz",
+		rv = "raw_illumina/{sample}_2.fastq.gz"
 	output:
 		fw = "trimmed_illumina/{sample}_1_AT_QT.fastq.gz",
 		rv = "trimmed_illumina/{sample}_2_AT_QT.fastq.gz",
@@ -327,7 +327,7 @@ rule clonalframeml:
 		tree = "iqtree_out",
 		aln = "snippy-core_out/core.full.aln"
 	output:
-		"clonalframeml_out"
+		directory("clonalframeml_out")
 	conda:
 		"envs/clonalframeml.yaml"
 	params:
@@ -339,7 +339,7 @@ rule clonalframeml:
 		"""
 		mkdir -p {output} && cd {output}
 		ClonalFrameML ../{input.tree}/{params.iqtreeprefix}.treefile ../{input.aln} {params.prefix} 2>&1>../{log}
-		if [ -f {output}/{params.prefix}_clonalframeml.labelled_tree.newick ]; then echo "CFML output exists"; else exit 1; fi
+		if [ -f {params.prefix}.labelled_tree.newick ]; then echo "CFML output exists"; else exit 1; fi
 		"""
 
 rule maskrc:
@@ -356,9 +356,11 @@ rule maskrc:
 		"logs/maskrc.log"
 	shell:
 		"""
+		bash scripts/download_maskrc.sh
 		cd clonalframeml_out
-		maskrc-svg.py --aln ../{input.aln} --out {output} {params.prefix} 2>&1>../{log}
+		python3 ../maskrc-svg.py --aln ../{input.aln} --out ../{output} {params.prefix} 2>&1>../{log}
 		"""
+
 rule filtlong:
 	input:
 		nanopore = "raw_nanopore/{sample}.fastq.gz",

@@ -1,6 +1,7 @@
 abricate_out
 abricate_summary
 all_reads
+amrfinder_out
 clonalframeml_out
 COMBAT_metadata.csv
 ezclermont_out
@@ -12,6 +13,7 @@ kraken_out
 list
 list_strains
 logs
+*.aln
 mlst
 multiqc_out
 prokka_out
