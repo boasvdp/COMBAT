@@ -18,6 +18,7 @@ logs
 mlst
 multiqc_out
 out
+plots
 prokka_out
 quast_out
 raw_illumina
