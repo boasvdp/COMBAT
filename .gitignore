@@ -27,6 +27,7 @@ slurm-*
 snakemake.job
 snippy-core_out
 snippy_out
+snp_comparisons.tsv
 spades_out
 summary
 trimmed_illumina

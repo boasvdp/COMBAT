@@ -21,7 +21,9 @@ rule all:
 		"masked.aln",
 		expand("fastqc_out/{sample}", sample=NANOPORE),
 		expand("unicycler_out/{sample}/assembly.fasta", sample=NANOPORE),
-		"snp_comparisons.tsv"
+		"snp_comparisons.tsv",
+		"plots/snp_comparisons_500.pdf",
+		"traveler_persistence_types.tsv"
 
 rule fastp:
 	input:
@@ -413,7 +415,7 @@ rule unicycler:
 	threads: 6
 	shell:
 		"""
-		unicycler -1 {input.fw} -2 {input.rv} --long {input.nanopore} -o {params.outdir} --threads {threads}
+		unicycler -1 {input.fw} -2 {input.rv} --long {input.nanopore} -o {params.outdir} --threads {threads} 2>&1>{log}
 		"""
 
 rule snp_comparisons:
@@ -427,5 +429,37 @@ rule snp_comparisons:
 		"logs/snp_comparisons"
 	shell:
 		"""
-		bash scripts/snp_comparisons.sh {output}
+		bash scripts/snp_comparisons.sh {output} 2>&1>{log}
+		"""
+
+rule plot_snp_comparisons:
+	input:
+		"snp_comparisons.tsv"
+	output:
+		"plots/snp_comparisons_50.pdf",
+		"plots/snp_comparisons_500.pdf",
+		"plots/snp_comparisons_full.pdf"
+	conda:
+		"envs/plot_snp_comparisons.yaml"
+	log:
+		"logs/plot_snp_comparisons"
+	shell:
+		"""
+		Rscript scripts/plot_snp_comparisons.R 2>&1>{log}
+		"""
+
+rule print_travelers:
+	input:
+		"plots/snp_comparisons_50.pdf",
+		"snp_comparisons.tsv"
+	output:
+		"traveler_persistence_types.tsv"
+	params:
+		threshold_verylikely  =  config["print_travelers"]["threshold_verylikely"],
+		threshold_likely =  config["print_travelers"]["threshold_likely"]
+	log:
+		"logs/print_travelers.log"
+	shell:
+		"""
+		bash scripts/print_travelers.sh {params.threshold_verylikely} {params.threshold_likely} > {output} 2>&1>{log}
 		"""

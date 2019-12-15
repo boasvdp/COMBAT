@@ -42,3 +42,7 @@ iqtree:
 filtlong:
  target_bases: "500000000"
  keep_percent: "100"
+
+print_travelers:
+ threshold_verylikely: "8"
+ threshold_likely: "17"
