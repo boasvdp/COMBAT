@@ -35,3 +35,4 @@ trimmed_illumina
 trimmed_nanopore
 unicycler_out
 .snakemake
+traveler_persistence_types.tsv

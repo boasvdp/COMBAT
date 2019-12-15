@@ -16,7 +16,7 @@ do
 	SNP=$(awk -v T=$traveler '$3 == T && $7 == "within_traveler_between_timepoint" {print $10}' snp_comparisons.tsv | sort -n | head -n 1)
 	if (( $(echo "$SNP > $THRESHOLD1" |bc -l) ))
 	then
-		echo "$traveler $SNP    Likely_clonal"
+		echo "$traveler	$SNP	Likely_clonal"
 	fi
 done
 
@@ -25,6 +25,6 @@ do
 	SNP=$(awk -v T=$traveler '$3 == T && $7 == "within_traveler_between_timepoint" {print $10}' snp_comparisons.tsv | sort -n | head -n 1)
 	if (( $(echo "$SNP > $THRESHOLD2" |bc -l) ))
 	then
-		echo "$traveler $SNP    Not_clonal"
+		echo "$traveler	$SNP	Not_clonal"
 	fi
 done

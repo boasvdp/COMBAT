@@ -461,5 +461,5 @@ rule print_travelers:
 		"logs/print_travelers.log"
 	shell:
 		"""
-		bash scripts/print_travelers.sh {params.threshold_verylikely} {params.threshold_likely} > {output} 2>&1>{log}
+		bash scripts/print_travelers.sh {params.threshold_verylikely} {params.threshold_likely} > {output} 2>{log}
 		"""
