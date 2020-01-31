@@ -698,6 +698,7 @@ rule ezclermont_summary_controls:
 
 rule comparison_phylogroups:
 	input:
+		"snp_comparisons.tsv",
 		"COMBAT_metadata.tsv",
 		"COMBAT_metadata_controls.tsv",
 		"ezclermont_summary.tsv",
@@ -706,9 +707,11 @@ rule comparison_phylogroups:
 		"phylogroup_comparison.tsv"
 	conda:
 		"envs/snp_comparisons.yaml"
+	params:
+		threshold =  config["print_travelers"]["threshold_likely"]
 	log:
 		"logs/phylogroup_comparison.log"
 	shell:
 		"""
-		python3 scripts/phylogroup_comparison.py 2>&1>{log}
+		python3 scripts/phylogroup_comparison.py {params.threshold} 2>&1>{log}
 		"""
