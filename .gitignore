@@ -28,6 +28,8 @@ quast_out
 raw_illumina
 raw_nanopore
 scripts/print_travelers2.sh
+scripts/summary_isolates.sh
+scripts/print_travelers.sh
 shovill_out
 slurm-*
 *.job
