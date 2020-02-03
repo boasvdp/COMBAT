@@ -11,7 +11,7 @@ This repository was created for the analysis of a COMBAT spin-off study. The ori
 ## Pipeline
 The pipeline is schematically picture below. Configuration can be managed through the `config.yaml` file.
 
-![rulegraph](https://github.com/boasvp/COMBAT/rulegraph.svg "Rulegraph")
+![rulegraph](https://github.com/boasvdp/COMBAT/blob/master/rulegraph.svg "Rulegraph")
 
 The input consists of Illumina and Nanopore sequencing data, which can be downloaded from ENA/SRA. The easiest way of running the pipeline is to use conda as follows:
 
