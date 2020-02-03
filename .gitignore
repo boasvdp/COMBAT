@@ -44,7 +44,8 @@ trimmed_nanopore
 unicycler_out
 .snakemake
 traveler_persistence_types.tsv
-*svg
+dag.svg
+filegraph.svg
 comparisons_phylogroups.tsv
 ezclermont_summary*.tsv
 
