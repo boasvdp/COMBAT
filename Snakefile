@@ -17,14 +17,13 @@ rule all:
 		expand("prokka_out/{sample}", sample=ILLUMINA),
 		expand("ezclermont_out/{sample}.tsv", sample=ILLUMINA),
 		"multiqc_out/multiqc_fastp.html",
-		"summary/summary.csv",
 		"abricate_summary/summary_ncbi.tsv",
 		expand("snippy_out/{sample}", sample=ILLUMINA),
 		"masked.aln",
 		expand("fastqc_out/{sample}", sample=NANOPORE),
 		expand("unicycler_out/{sample}/assembly.fasta", sample=NANOPORE),
-		"snp_comparisons.tsv",
-		"plots/snp_comparisons_500.pdf",
+		"snp_comparison/snp_comparisons.tsv",
+		"snp_comparison/snp_comparisons_thresholds.pdf",
 		"traveler_persistence_types.tsv",
 		expand("ESBL_contigs/{sample}.fasta", sample=NANOPORE),
 		expand("ESBL_contigs_annotations/{sample}", sample=NANOPORE),
@@ -246,29 +245,11 @@ rule multiqc:
 		NAME=${{OUTPUT##*/}}
 		INPUT=$(for i in {input.fastp}; do echo ${{i%/*}}; done | sort | uniq)
 		multiqc -n ${{NAME}} -o ${{DIR}} ${{INPUT}} 2>&1>{log.fastp}
-		
 		OUTPUT={output.quast}
 		DIR=${{OUTPUT%/*}}
 		NAME=${{OUTPUT##*/}}
 		INPUT=$(for i in {input.quast}; do echo ${{i%/*}}; done | sort | uniq)
 		multiqc -n ${{NAME}} -o ${{DIR}} ${{INPUT}} 2>&1>{log.quast}
-		"""
-
-rule summary:
-	input:
-		kraken = expand("kraken_out/{sample}_kraken2_report.txt", sample=ILLUMINA),
-		quast = expand("quast_out/{sample}", sample=ILLUMINA),
-		abricate = expand("abricate_out/ncbi/{sample}_ncbi.tsv", sample=ILLUMINA),
-		mlst = expand("mlst/{sample}.tsv", sample=ILLUMINA),
-		prokka = expand("prokka_out/{sample}", sample=ILLUMINA),
-		ezclermont = expand("ezclermont_out/{sample}.tsv", sample=ILLUMINA)
-	output:
-		"summary/summary.csv"
-	log:
-		"logs/summary.log"
-	shell:
-		"""
-		bash scripts/summary_isolates.sh {input.quast} > {output} 2>{log}
 		"""
 
 rule abricate_summary:
@@ -446,41 +427,44 @@ rule unicycler:
 
 rule snp_comparisons:
 	input:
-		"masked.aln",
-		"COMBAT_metadata.tsv",
-		"list_strains.txt"
+		aln = "masked.aln",
+		metadata = "COMBAT_metadata.tsv",
+		list = "list_strains.txt"
 	output:
-		"snp_comparisons.tsv"
+		final = "snp_comparison/snp_comparisons.tsv",
+		snpmatstandard = "snp_comparison/snp_distances_standard.tsv",
+		snpmatnogaps = "snp_comparison/snp_distances_no_gaps.tsv"
 	conda:
 		"envs/snp_comparisons.yaml"
 	log:
 		"logs/snp_comparisons"
 	shell:
 		"""
+		snp-dists {input.aln} > {output.snpmatstandard}
+		snp-sites -cb {input.aln} | snp-dists /dev/stdin > {output.snpmatnogaps}
 		python3 scripts/snp_comparisons.py 2>&1>{log}
-		bash scripts/snp_comparisons.sh {output} 2>&1>{log}
+		bash scripts/snp_comparisons.sh {output.final} 2>&1>>{log}
 		"""
 
 rule plot_snp_comparisons:
 	input:
-		"snp_comparisons.tsv"
+		"snp_comparison/snp_comparisons.tsv"
 	output:
-		"plots/snp_comparisons_50.pdf",
-		"plots/snp_comparisons_500.pdf",
-		"plots/snp_comparisons_full.pdf"
+		"snp_comparison/snp_comparisons_thresholds.pdf"
 	conda:
-		"envs/plot_snp_comparisons.yaml"
+		"envs/snp_comparisons.yaml"
 	log:
 		"logs/plot_snp_comparisons"
 	shell:
 		"""
-		Rscript scripts/plot_snp_comparisons.R 2>&1>{log}
+		python3 scripts/prepare_input_plot_SNP_threshold.py > snp_comparison/input_plot_SNP_threshold.tsv
+		Rscript scripts/plot_SNP_threshold.R 2>&1>{log}
 		"""
 
 rule print_travelers:
 	input:
-		"plots/snp_comparisons_50.pdf",
-		"snp_comparisons.tsv"
+		"snp_comparison/snp_comparisons_thresholds.pdf",
+		"snp_comparison/snp_comparisons.tsv"
 	output:
 		"traveler_persistence_types.tsv"
 	params:
@@ -490,7 +474,7 @@ rule print_travelers:
 		"logs/print_travelers.log"
 	shell:
 		"""
-		bash scripts/print_travelers.py {params.threshold_verylikely} {params.threshold_likely} > {output} 2>{log}
+		python3 scripts/print_travelers.py {params.threshold_verylikely} {params.threshold_likely} > {output} 2>{log}
 		"""
 
 rule amrfinder_nanopore:
@@ -676,7 +660,6 @@ rule multiqc_controls:
 		NAME=${{OUTPUT##*/}}
 		INPUT=$(for i in {input.fastp}; do echo ${{i%/*}}; done | sort | uniq)
 		multiqc -n ${{NAME}} -o ${{DIR}} ${{INPUT}} 2>&1>{log.fastp}
-		
 		OUTPUT={output.quast}
 		DIR=${{OUTPUT%/*}}
 		NAME=${{OUTPUT##*/}}
@@ -698,11 +681,12 @@ rule ezclermont_summary_controls:
 
 rule comparison_phylogroups:
 	input:
-		"snp_comparisons.tsv",
+		"snp_comparison/snp_comparisons.tsv",
 		"COMBAT_metadata.tsv",
 		"COMBAT_metadata_controls.tsv",
 		"ezclermont_summary.tsv",
-		"ezclermont_summary_controls.tsv"
+		"ezclermont_summary_controls.tsv",
+		"traveler_persistence_types.tsv"
 	output:
 		"phylogroup_comparison.tsv"
 	conda:

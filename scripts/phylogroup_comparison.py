@@ -5,7 +5,7 @@ import sys
 
 ### For long-term colonising strains
 # Read snp_comparisons file, which will be used to find persistent strains which can be linked to phylogroups
-snp_comparisons = pd.read_csv('snp_comparisons.tsv', sep = '\t')
+snp_comparisons = pd.read_csv('snp_comparison/snp_comparisons.tsv', sep = '\t')
 
 # Read tsv file which summarises which strain is which phylogroup
 ezclermont = pd.read_csv('ezclermont_summary.tsv', sep  = '\t', names = ["strain", "phylogroup"])
@@ -14,7 +14,7 @@ ezclermont = pd.read_csv('ezclermont_summary.tsv', sep  = '\t', names = ["strain
 T = int(sys.argv[1])
 
 # Find strains which have persisted based on threshold defined above
-snp_comparisons_clonal = snp_comparisons.query('comparison  == "within_traveler_between_timepoint" & SNPs_per_mbp <= @T')
+snp_comparisons_clonal = snp_comparisons.query('comparison  == "within_traveler_between_timepoint" & SNPs_corrected <= @T')
 
 # Merge dataframes: ezclermont phylogroups are added to persisting strains
 snp_comparisons_clonal = pd.merge(left = snp_comparisons_clonal, right = ezclermont, left_on = 'strain2', right_on = 'strain')

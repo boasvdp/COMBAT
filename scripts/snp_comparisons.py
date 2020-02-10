@@ -38,5 +38,14 @@ choices = [
 # Assign comparison types using numpy and previously defined conditions and choices
 df['comparison'] = np.select(conditions, choices, default=np.nan)
 
-# Write to tsv file
-df.to_csv("comparisons_intermediate.tsv", sep = '\t', index=False)
+snpmat_standard = pd.read_csv('snp_comparison/snp_distances_standard.tsv', sep = '\t', index_col = 0)
+snpmat_standard = snpmat_standard.stack().reset_index()
+snpmat_standard.columns = ['strain1','strain2','SNPs_not_corrected']
+
+snpmat_nogaps = pd.read_csv('snp_comparison/snp_distances_no_gaps.tsv', sep = '\t', index_col = 0)
+snpmat_nogaps = snpmat_nogaps.stack().reset_index()
+snpmat_nogaps.columns = ['strain1','strain2','SNPs_nogaps']
+
+snp_comparisons = pd.merge(df, snpmat_nogaps, how='left', left_on=['strain1','strain2'], right_on = ['strain1','strain2'])
+snp_comparisons = pd.merge(snp_comparisons, snpmat_standard, how='left', left_on=['strain1','strain2'], right_on = ['strain1','strain2'])
+snp_comparisons.to_csv('snp_comparisons_intermediate.tsv', sep ='\t', index=False)
