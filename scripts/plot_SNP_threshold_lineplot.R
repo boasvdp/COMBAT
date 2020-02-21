@@ -1,7 +1,7 @@
 library(reshape2)
 library(ggplot2)
 
-pdf(file = "snp_comparison/snp_comparisons_thresholds.pdf", height = 6, width = 11)
+pdf(file = "snp_comparison/snp_comparisons_thresholds_lineplot.pdf", height = 6, width = 11)
 
 df <- read.delim("snp_comparison/input_plot_SNP_threshold.tsv")
 

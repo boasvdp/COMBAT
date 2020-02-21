@@ -23,7 +23,8 @@ rule all:
 		expand("fastqc_out/{sample}", sample=NANOPORE),
 		expand("unicycler_out/{sample}/assembly.fasta", sample=NANOPORE),
 		"snp_comparison/snp_comparisons.tsv",
-		"snp_comparison/snp_comparisons_thresholds.pdf",
+		"snp_comparison/snp_comparisons_thresholds_lineplot.pdf",
+		"snp_comparison/snp_comparison_histogram_corrected_50.pdf",
 		"traveler_persistence_types.tsv",
 		expand("ESBL_contigs/{sample}.fasta", sample=NANOPORE),
 		expand("ESBL_contigs_annotations/{sample}", sample=NANOPORE),
@@ -235,6 +236,8 @@ rule multiqc:
 		quast = "multiqc_out/multiqc_quast.html",
 		fastp_data = directory("multiqc_out/multiqc_fastp_data"),
 		quast_data = directory("multiqc_out/multiqc_quast_data")
+	conda:
+		"envs/multiqc.yaml"
 	log:
 		fastp = "logs/multiqc_fastp.log",
 		quast = "logs/multiqc_quast.log"
@@ -450,15 +453,17 @@ rule plot_snp_comparisons:
 	input:
 		"snp_comparison/snp_comparisons.tsv"
 	output:
-		"snp_comparison/snp_comparisons_thresholds.pdf"
+		"snp_comparison/snp_comparisons_thresholds_lineplot.pdf",
+		"snp_comparison/snp_comparison_histogram_corrected_50.pdf"
 	conda:
 		"envs/snp_comparisons.yaml"
 	log:
 		"logs/plot_snp_comparisons"
 	shell:
 		"""
-		python3 scripts/prepare_input_plot_SNP_threshold.py > snp_comparison/input_plot_SNP_threshold.tsv
-		Rscript scripts/plot_SNP_threshold.R 2>&1>{log}
+		python3 scripts/prepare_input_plot_SNP_threshold.py > snp_comparison/input_plot_SNP_threshold.tsv 2>{log}
+		Rscript scripts/plot_SNP_threshold_histogram.R 2>&1>>{log}
+		Rscript scripts/plot_SNP_threshold_lineplot.R 2>&1>>{log}
 		"""
 
 rule print_travelers:
