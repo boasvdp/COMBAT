@@ -3,9 +3,12 @@
 import pandas as pd
 import sys
 
+path_snp_comparisons = str(sys.argv[2])
+path_output = str(sys.argv[3])
+
 ### For long-term colonising strains
 # Read snp_comparisons file, which will be used to find persistent strains which can be linked to phylogroups
-snp_comparisons = pd.read_csv('snp_comparison/snp_comparisons.tsv', sep = '\t')
+snp_comparisons = pd.read_csv(path_snp_comparisons, sep = '\t')
 
 # Read tsv file which summarises which strain is which phylogroup
 ezclermont = pd.read_csv('ezclermont_summary.tsv', sep  = '\t', names = ["strain", "phylogroup"])
@@ -43,4 +46,4 @@ phylogroups = phylogroups_longterm.append(phylogroups_shortterm)
 out = phylogroups.groupby('type')['phylogroup'].value_counts().unstack().fillna(0).transpose()
 
 # Write to a tsv file, and switch float to integer by formatting
-out.to_csv('phylogroup_comparison.tsv', sep = '\t', float_format='%.f')
+out.to_csv(path_output, sep = '\t', float_format='%.f')

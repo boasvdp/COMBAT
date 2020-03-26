@@ -1,42 +1,38 @@
 configfile: "config.yaml"
 
-NANOPORE, = glob_wildcards("raw_nanopore/{id}.fastq.gz")
-ILLUMINA, = glob_wildcards("raw_illumina/{id}_1.fastq.gz")
-CONTROLS, = glob_wildcards("controls/raw_illumina/{id}_1.fastq.gz")
+import pandas as pd
 
-#ILLUMINA = [ "COMB0108", "COMB0109" ]
-#NANOPORE = [ "COMB0108" ]
+# Read the MLSTs from the provided summary file
+df = pd.read_csv('mlst_summary.tsv', sep = '\t')
+
+# Check which entries are not ST38
+notST38 = df['st']!='38'
+
+# Make tuple out of non-ST38 strains
+WITHOUTST38 = tuple(df[notST38].strain)
+
+# Other ID tuples can be globbed from input dirs
+NANOPORE, = glob_wildcards("raw_nanopore/{id}.fastq.gz")
+WITHST38, = glob_wildcards("raw_illumina/{id}_1.fastq.gz")
+CONTROLS, = glob_wildcards("controls/raw_illumina/{id}_1.fastq.gz")
 
 rule all:
 	input:
-		expand("kraken_out/{sample}_kraken2_report.txt", sample=ILLUMINA),
-		expand("quast_out/{sample}", sample=ILLUMINA),
-		expand("abricate_out/ncbi/{sample}_ncbi.tsv", sample=ILLUMINA),
-		expand("amrfinder_out/{sample}.tsv", sample=ILLUMINA),
-		expand("mlst/{sample}.tsv", sample=ILLUMINA),
-		expand("prokka_out/{sample}", sample=ILLUMINA),
-		expand("ezclermont_out/{sample}.tsv", sample=ILLUMINA),
+		expand("kraken_out/{sample}_kraken2_report.txt", sample=WITHST38),
+		expand("amrfinder_out/{sample}.tsv", sample=WITHST38),
+		expand("mlst/{sample}.tsv", sample=WITHST38),
+		expand("prokka_out/{sample}", sample=WITHST38),
 		"multiqc_out/multiqc_fastp.html",
 		"abricate_summary/summary_ncbi.tsv",
-		expand("snippy_out/{sample}", sample=ILLUMINA),
-		"masked.aln",
 		expand("fastqc_out/{sample}", sample=NANOPORE),
-		expand("unicycler_out/{sample}/assembly.fasta", sample=NANOPORE),
-		"snp_comparison/snp_comparisons.tsv",
-		"snp_comparison/snp_comparisons_thresholds_lineplot.pdf",
-		"snp_comparison/snp_comparison_histogram_corrected_50.pdf",
-		"traveler_persistence_types.tsv",
-		expand("ESBL_contigs/{sample}.fasta", sample=NANOPORE),
 		expand("ESBL_contigs_annotations/{sample}", sample=NANOPORE),
-		"ezclermont_summary.tsv",
 		expand("controls/kraken_out/{sample}_kraken2_report.txt", sample=CONTROLS),
-		expand("controls/quast_out/{sample}", sample=CONTROLS),
 		expand("controls/mlst/{sample}.tsv", sample=CONTROLS),
-		expand("controls/ezclermont_out/{sample}.tsv", sample=CONTROLS),
 		"controls/multiqc_out/multiqc_fastp.html",
-		"ezclermont_summary_controls.tsv",
-		"phylogroup_comparison.tsv"
+		"phylogroup_comparison_withST38.tsv",
+		"phylogroup_comparison_withoutST38.tsv"
 
+### STANDARD PIPELINE
 
 rule fastp:
 	input:
@@ -217,7 +213,7 @@ rule ezclermont:
 
 rule ezclermont_summary:
 	input:
-		expand("ezclermont_out/{sample}.tsv", sample=ILLUMINA)
+		expand("ezclermont_out/{sample}.tsv", sample=WITHST38)
 	output:
 		"ezclermont_summary.tsv"
 	log:
@@ -229,8 +225,8 @@ rule ezclermont_summary:
 
 rule multiqc:
 	input:
-		fastp = expand("fastp_out/json/{sample}_AT_QT_fastp.json", sample=ILLUMINA),
-		quast = expand("quast_out/{sample}", sample=ILLUMINA)
+		fastp = expand("fastp_out/json/{sample}_AT_QT_fastp.json", sample=WITHST38),
+		quast = expand("quast_out/{sample}", sample=WITHST38)
 	output:
 		fastp = "multiqc_out/multiqc_fastp.html",
 		quast = "multiqc_out/multiqc_quast.html",
@@ -257,10 +253,10 @@ rule multiqc:
 
 rule abricate_summary:
 	input:
-		ncbi = expand("abricate_out/ncbi/{sample}_ncbi.tsv", sample=ILLUMINA),
-		vfdb = expand("abricate_out/vfdb/{sample}_vfdb.tsv", sample=ILLUMINA),
-		ecoh = expand("abricate_out/ecoh/{sample}_ecoh.tsv", sample=ILLUMINA),
-		plasmidfinder = expand("abricate_out/plasmidfinder/{sample}_plasmidfinder.tsv", sample=ILLUMINA)
+		ncbi = expand("abricate_out/ncbi/{sample}_ncbi.tsv", sample=WITHST38),
+		vfdb = expand("abricate_out/vfdb/{sample}_vfdb.tsv", sample=WITHST38),
+		ecoh = expand("abricate_out/ecoh/{sample}_ecoh.tsv", sample=WITHST38),
+		plasmidfinder = expand("abricate_out/plasmidfinder/{sample}_plasmidfinder.tsv", sample=WITHST38)
 	output:
 		ncbi = "abricate_summary/summary_ncbi.tsv",
 		vfdb = "abricate_summary/summary_vfdb.tsv",
@@ -296,17 +292,19 @@ rule snippy:
 		snippy {params.general} --cpus {threads} --outdir {output} --ref {input.ref} --pe1 {input.fw} --pe2 {input.rv} 2>{log}
 		"""
 
-rule snippycore:
+### SNP COMPARISONS
+
+rule snippycore_withST38:
 	input:
-		data = expand("snippy_out/{sample}", sample=ILLUMINA),
+		data = expand("snippy_out/{sample}", sample=WITHST38),
 		ref = "references/ATCC25922.gbk"
 	output:
-		full = "snippy-core_out/core.full.aln",
-		snps = "snippy-core_out/core.aln"
+		full = "snippy-core_withST38_out/core.full.aln",
+		snps = "snippy-core_withST38_out/core.aln"
 	conda:
 		"envs/snippy.yaml"
 	params:
-		outdir = "snippy-core_out"
+		outdir = "snippy-core_withST38_out"
 	log:
 		"logs/snippycore.log"
 	shell:
@@ -316,18 +314,40 @@ rule snippycore:
 		mv core.aln core.full.aln core.tab core.vcf core.txt core.ref.fa {params.outdir}
 		"""
 
-rule iqtree:
+rule snippycore_withoutST38:
 	input:
-		core = "snippy-core_out/core.aln",
-		fullcore = "snippy-core_out/core.full.aln"
+		data = expand("snippy_out/{sample}", sample=WITHOUTST38),
+		ref = "references/ATCC25922.gbk",
+		dummy = "snippy-core_withST38_out/core.full.aln"
 	output:
-		directory("iqtree_out")
+		full = "snippy-core_withoutST38_out/core.full.aln",
+		snps = "snippy-core_withoutST38_out/core.aln"
+	conda:
+		"envs/snippy.yaml"
+	params:
+		outdir = "snippy-core_withoutST38_out"
+	log:
+		"logs/snippycore_withoutST38.log"
+	shell:
+		"""
+		mkdir -p {params.outdir}
+		snippy-core --ref {input.ref} {input.data} 2>&1>{log}
+		mv core.aln core.full.aln core.tab core.vcf core.txt core.ref.fa {params.outdir}
+		"""
+
+rule iqtree_withST38:
+	input:
+		core = "snippy-core_withST38_out/core.aln",
+		fullcore = "snippy-core_withST38_out/core.full.aln"
+	output:
+		directory("iqtree_withST38_out")
 	conda:
 		"envs/iqtree_snp-sites.yaml"
 	params:
 		prefix = config["iqtree"]["prefix"]
 	log:
-		"logs/iqtree.log"
+		"logs/iqtree_withST38.log"
+	threads: 16
 	shell:
 		"""
 		mkdir -p {output} && cd {output}
@@ -335,32 +355,76 @@ rule iqtree:
 		if [ -f {params.prefix}.treefile ]; then echo "{output}/{params.prefix}.treefile exists"; else exit 1; fi
 		"""
 
-rule clonalframeml:
+rule iqtree_withoutST38:
 	input:
-		tree = "iqtree_out",
-		aln = "snippy-core_out/core.full.aln"
+		core = "snippy-core_withoutST38_out/core.aln",
+		fullcore = "snippy-core_withoutST38_out/core.full.aln",
+		dummy = "iqtree_withST38_out"
 	output:
-		directory("clonalframeml_out")
+		directory("iqtree_withoutST38_out")
+	conda:
+		"envs/iqtree_snp-sites.yaml"
+	params:
+		prefix = config["iqtree"]["prefix"]
+	log:
+		"logs/iqtree_withoutST38.log"
+	threads: 16
+	shell:
+		"""
+		mkdir -p {output} && cd {output}
+		iqtree -fconst $(snp-sites -C ../{input.fullcore}) -nt AUTO -pre {params.prefix} -s ../{input.core} 2>&1>../{log}
+		if [ -f {params.prefix}.treefile ]; then echo "{output}/{params.prefix}.treefile exists"; else exit 1; fi
+		"""
+
+rule clonalframeml_withST38:
+	input:
+		tree = "iqtree_withST38_out",
+		aln = "snippy-core_withST38_out/core.full.aln"
+	output:
+		directory("clonalframeml_withST38_out")
 	conda:
 		"envs/clonalframeml.yaml"
 	params:
 		prefix = "COMBAT_clonalframeml",
 		iqtreeprefix = config["iqtree"]["prefix"]
 	log:
-		"logs/clonalframeml.log"
+		"logs/clonalframeml_withST38.log"
+	threads: 16
 	shell:
 		"""
 		mkdir -p {output} && cd {output}
-		ClonalFrameML ../{input.tree}/{params.iqtreeprefix}.treefile ../{input.aln} {params.prefix} 2>&1>../{log}
+		ClonalFrameML ../{input.tree}/{params.iqtreeprefix}.treefile ../{input.aln} {params.prefix} -show_progress true 2>&1>../{log}
 		if [ -f {params.prefix}.labelled_tree.newick ]; then echo "CFML output exists"; else exit 1; fi
 		"""
 
-rule maskrc:
+rule clonalframeml_withoutST38:
 	input:
-		aln = "snippy-core_out/core.full.aln",
-		cfml = "clonalframeml_out"
+		tree = "iqtree_withoutST38_out",
+		aln = "snippy-core_withoutST38_out/core.full.aln",
+		dummy = "clonalframeml_withST38_out"
 	output:
-		"masked.aln"
+		directory("clonalframeml_withoutST38_out")
+	conda:
+		"envs/clonalframeml.yaml"
+	params:
+		prefix = "COMBAT_clonalframeml",
+		iqtreeprefix = config["iqtree"]["prefix"]
+	log:
+		"logs/clonalframeml_withST38.log"
+	threads: 16
+	shell:
+		"""
+		mkdir -p {output} && cd {output}
+		ClonalFrameML ../{input.tree}/{params.iqtreeprefix}.treefile ../{input.aln} {params.prefix} -show_progress true 2>&1>../{log}
+		if [ -f {params.prefix}.labelled_tree.newick ]; then echo "CFML output exists"; else exit 1; fi
+		"""
+
+rule maskrc_withST38:
+	input:
+		aln = "snippy-core_withST38_out/core.full.aln",
+		cfml = "clonalframeml_withST38_out"
+	output:
+		"masked_withST38.aln"
 	conda:
 		"envs/maskrc.yaml"
 	params:
@@ -370,9 +434,154 @@ rule maskrc:
 	shell:
 		"""
 		bash scripts/download_maskrc.sh
-		cd clonalframeml_out
+		cd clonalframeml_withST38_out
 		python3 ../maskrc-svg.py --aln ../{input.aln} --out ../{output} {params.prefix} 2>&1>../{log}
 		"""
+
+rule maskrc_withoutST38:
+	input:
+		aln = "snippy-core_withoutST38_out/core.full.aln",
+		cfml = "clonalframeml_withoutST38_out",
+		dummy = "masked_withST38.aln"
+	output:
+		"masked_withoutST38.aln"
+	conda:
+		"envs/maskrc.yaml"
+	params:
+		prefix = "COMBAT_clonalframeml"
+	log:
+		"logs/maskrc.log"
+	shell:
+		"""
+		bash scripts/download_maskrc.sh
+		cd clonalframeml_withoutST38_out
+		python3 ../maskrc-svg.py --aln ../{input.aln} --out ../{output} {params.prefix} 2>&1>../{log}
+		"""
+
+rule snp_dists:
+	input:
+		ST38 = "masked_withST38.aln",
+		noST38 = "masked_withoutST38.aln"
+	output:
+		snpmatstandard_withST38 = "snp_comparison/snp_distances_standard_withST38.tsv",
+		snpmatnogaps_withST38 = "snp_comparison/snp_distances_no_gaps_withST38.tsv",
+		snpmatstandard_withoutST38 = "snp_comparison/snp_distances_standard_withoutST38.tsv",
+		snpmatnogaps_withoutST38 = "snp_comparison/snp_distances_no_gaps_withoutST38.tsv"
+	conda:
+		"envs/snp_comparisons.yaml"
+	log:
+		"logs/snp_dists.log"
+	shell:
+		"""
+		snp-dists -m {input.ST38} > {output.snpmatstandard_withST38}
+		snp-sites -cb {input.ST38} | snp-dists -m /dev/stdin > {output.snpmatnogaps_withST38}
+		snp-dists -m {input.noST38} > {output.snpmatstandard_withoutST38}
+		snp-sites -cb {input.noST38} | snp-dists -m /dev/stdin > {output.snpmatnogaps_withoutST38}
+		"""
+
+rule alnlengths:
+	input:
+		ST38 = "masked_withST38.aln",
+		noST38 = "masked_withoutST38.aln"
+	output:
+		alnlengths_withST38 = "snp_comparison/alnlengths_withST38.tsv",
+		alnlengths_withoutST38 = "snp_comparison/alnlengths_withoutST38.tsv"
+	log:
+		"logs/alnlengths.log"
+	shell:
+		"""
+		bash scripts/download_snp-dists-alnlengths.sh
+		scripts/snp-dists-alnlengths -l {input.ST38} > {output.alnlengths_withST38} 2>{log}
+		scripts/snp-dists-alnlengths -l {input.noST38} > {output.alnlengths_withoutST38} 2>>{log}
+		"""
+
+rule snp_comparisons:
+	input:
+		ST38 = "masked_withST38.aln",
+		noST38 = "masked_withoutST38.aln",
+		snpmatstandard_withST38 = "snp_comparison/snp_distances_standard_withST38.tsv",
+		snpmatnogaps_withST38 = "snp_comparison/snp_distances_no_gaps_withST38.tsv",
+		snpmatstandard_withoutST38 = "snp_comparison/snp_distances_standard_withoutST38.tsv",
+		snpmatnogaps_withoutST38 = "snp_comparison/snp_distances_no_gaps_withoutST38.tsv",
+		metadata = "COMBAT_metadata.tsv",
+		list_withST38 = "list_strains_withST38.txt",
+		list_withoutST38 = "list_strains_withoutST38.txt",
+		alnlengths_withST38 = "snp_comparison/alnlengths_withST38.tsv",
+		alnlengths_withoutST38 = "snp_comparison/alnlengths_withoutST38.tsv"
+	output:
+		final_withST38 = "snp_comparison/snp_comparisons_withST38.tsv",
+		final_withoutST38 = "snp_comparison/snp_comparisons_withoutST38.tsv"
+	conda:
+		"envs/snp_comparisons.yaml"
+	log:
+		"logs/snp_comparisons.log"	
+	shell:
+		"""
+		python3 scripts/snp_comparisons.py {input.list_withST38} {input.snpmatstandard_withST38} {input.snpmatnogaps_withST38} {input.alnlengths_withST38} {output.final_withST38} 2>&1>{log}
+		python3 scripts/snp_comparisons.py {input.list_withoutST38} {input.snpmatstandard_withoutST38} {input.snpmatnogaps_withoutST38} {input.alnlengths_withoutST38} {output.final_withoutST38} 2>&1>{log}
+		"""
+
+rule plot_snp_comparisons:
+	input:
+		withST38 = "snp_comparison/snp_comparisons_withST38.tsv",
+		withoutST38 = "snp_comparison/snp_comparisons_withoutST38.tsv"
+	output:
+		data_withST38 = "snp_comparison/input_plot_SNP_threshold_withST38.tsv",
+		data_withoutST38 = "snp_comparison/input_plot_SNP_threshold_withoutST38.tsv",
+		lineplot_withST38 = "snp_comparison/snp_comparisons_thresholds_lineplot_withST38.pdf",
+		histo_withST38 = "snp_comparison/snp_comparison_histogram_corrected_50_withST38.pdf",
+		lineplot_withoutST38 = "snp_comparison/snp_comparisons_thresholds_lineplot_withoutST38.pdf",
+		histo_withoutST38 = "snp_comparison/snp_comparison_histogram_corrected_50_withoutST38.pdf"
+	conda:
+		"envs/snp_comparisons.yaml"
+	log:
+		"logs/plot_snp_comparisons"
+	shell:
+		"""
+		python3 scripts/prepare_input_plot_SNP_threshold.py {input.withST38} > {output.data_withST38} 2>{log}
+		python3 scripts/prepare_input_plot_SNP_threshold.py {input.withoutST38} > {output.data_withoutST38} 2>>{log}
+		Rscript scripts/plot_SNP_threshold_histogram.R 2>&1>>{log}
+		Rscript scripts/plot_SNP_threshold_lineplot.R 2>&1>>{log}
+		"""
+
+rule print_travelers_withST38:
+	input:
+		lineplot = "snp_comparison/snp_comparisons_thresholds_lineplot_withST38.pdf",
+		snpcomparisons = "snp_comparison/snp_comparisons_withST38.tsv"
+	output:
+		"traveler_persistence_types_withST38.tsv"
+	params:
+		threshold_verylikely  =  config["print_travelers_withST38"]["threshold_verylikely"],
+		threshold_likely =  config["print_travelers_withST38"]["threshold_likely"]
+	conda:
+		"envs/snp_comparisons.yaml"
+	log:
+		"logs/print_travelers_withST38.log"
+	shell:
+		"""
+		python3 scripts/print_travelers.py {params.threshold_verylikely} {params.threshold_likely} {input.snpcomparisons} > {output} 2>{log}
+		"""
+
+rule print_travelers_withoutST38:
+	input:
+		lineplot = "snp_comparison/snp_comparisons_thresholds_lineplot_withoutST38.pdf",
+		snpcomparisons = "snp_comparison/snp_comparisons_withoutST38.tsv"
+	output:
+		"traveler_persistence_types_withoutST38.tsv"
+	params:
+		threshold_verylikely  =  config["print_travelers_withoutST38"]["threshold_verylikely"],
+		threshold_likely =  config["print_travelers_withoutST38"]["threshold_likely"]
+	conda:
+		"envs/snp_comparisons.yaml"
+	log:
+		"logs/print_travelers_withoutST38.log"
+	shell:
+		"""
+		python3 scripts/print_travelers.py {params.threshold_verylikely} {params.threshold_likely} {input.snpcomparisons} > {output} 2>{log}
+		"""
+
+
+### NANOPORE DATA
 
 rule filtlong:
 	input:
@@ -426,60 +635,6 @@ rule unicycler:
 	shell:
 		"""
 		unicycler -1 {input.fw} -2 {input.rv} --long {input.nanopore} -o {params.outdir} --threads {threads} 2>&1>{log}
-		"""
-
-rule snp_comparisons:
-	input:
-		aln = "masked.aln",
-		metadata = "COMBAT_metadata.tsv",
-		list = "list_strains.txt"
-	output:
-		final = "snp_comparison/snp_comparisons.tsv",
-		snpmatstandard = "snp_comparison/snp_distances_standard.tsv",
-		snpmatnogaps = "snp_comparison/snp_distances_no_gaps.tsv"
-	conda:
-		"envs/snp_comparisons.yaml"
-	log:
-		"logs/snp_comparisons"
-	shell:
-		"""
-		snp-dists {input.aln} > {output.snpmatstandard}
-		snp-sites -cb {input.aln} | snp-dists /dev/stdin > {output.snpmatnogaps}
-		python3 scripts/snp_comparisons.py 2>&1>{log}
-		bash scripts/snp_comparisons.sh {output.final} 2>&1>>{log}
-		"""
-
-rule plot_snp_comparisons:
-	input:
-		"snp_comparison/snp_comparisons.tsv"
-	output:
-		"snp_comparison/snp_comparisons_thresholds_lineplot.pdf",
-		"snp_comparison/snp_comparison_histogram_corrected_50.pdf"
-	conda:
-		"envs/snp_comparisons.yaml"
-	log:
-		"logs/plot_snp_comparisons"
-	shell:
-		"""
-		python3 scripts/prepare_input_plot_SNP_threshold.py > snp_comparison/input_plot_SNP_threshold.tsv 2>{log}
-		Rscript scripts/plot_SNP_threshold_histogram.R 2>&1>>{log}
-		Rscript scripts/plot_SNP_threshold_lineplot.R 2>&1>>{log}
-		"""
-
-rule print_travelers:
-	input:
-		"snp_comparison/snp_comparisons_thresholds.pdf",
-		"snp_comparison/snp_comparisons.tsv"
-	output:
-		"traveler_persistence_types.tsv"
-	params:
-		threshold_verylikely  =  config["print_travelers"]["threshold_verylikely"],
-		threshold_likely =  config["print_travelers"]["threshold_likely"]
-	log:
-		"logs/print_travelers.log"
-	shell:
-		"""
-		python3 scripts/print_travelers.py {params.threshold_verylikely} {params.threshold_likely} > {output} 2>{log}
 		"""
 
 rule amrfinder_nanopore:
@@ -536,6 +691,8 @@ rule prokka_ESBL_contigs:
 		prokka {params.general} --force --outdir {output} --genus {params.genus} --species {params.species} --kingdom {params.kingdom} --cpus {threads} --prefix {params.prefix} {input} 2>&1>{log}
 		if [ -f {output}/*.ffn ]; then echo "{output} exists"; else exit 1; fi
 		"""
+
+### MATCHED CONTROLS
 
 rule fastp_controls:
 	input:
@@ -684,23 +841,45 @@ rule ezclermont_summary_controls:
 		cat {input} 1> {output} 2>{log}
 		"""
 
-rule comparison_phylogroups:
+rule comparison_phylogroups_withST38:
 	input:
-		"snp_comparison/snp_comparisons.tsv",
-		"COMBAT_metadata.tsv",
-		"COMBAT_metadata_controls.tsv",
-		"ezclermont_summary.tsv",
-		"ezclermont_summary_controls.tsv",
-		"traveler_persistence_types.tsv"
+		snpcomparisons = "snp_comparison/snp_comparisons_withST38.tsv",
+		metadata = "COMBAT_metadata.tsv",
+		metadata_controls = "COMBAT_metadata_controls.tsv",
+		phylo_summary = "ezclermont_summary.tsv",
+		phylo_summary_controls = "ezclermont_summary_controls.tsv",
+		travelers = "traveler_persistence_types_withST38.tsv"
 	output:
-		"phylogroup_comparison.tsv"
+		"phylogroup_comparison_withST38.tsv"
 	conda:
 		"envs/snp_comparisons.yaml"
 	params:
-		threshold =  config["print_travelers"]["threshold_likely"]
+		threshold =  config["print_travelers_withST38"]["threshold_likely"]
 	log:
 		"logs/phylogroup_comparison.log"
 	shell:
 		"""
-		python3 scripts/phylogroup_comparison.py {params.threshold} 2>&1>{log}
+		python3 scripts/phylogroup_comparison.py {params.threshold} {input.snpcomparisons} {output} 2>&1>{log}
 		"""
+
+rule comparison_phylogroups_withoutST38:
+	input:
+		snpcomparisons = "snp_comparison/snp_comparisons_withoutST38.tsv",
+		metadata = "COMBAT_metadata.tsv",
+		metadata_controls = "COMBAT_metadata_controls.tsv",
+		phylo_summary = "ezclermont_summary.tsv",
+		phylo_summary_controls = "ezclermont_summary_controls.tsv",
+		travelers = "traveler_persistence_types_withoutST38.tsv"
+	output:
+		"phylogroup_comparison_withoutST38.tsv"
+	conda:
+		"envs/snp_comparisons.yaml"
+	params:
+		threshold =  config["print_travelers_withoutST38"]["threshold_likely"]
+	log:
+		"logs/phylogroup_comparison.log"
+	shell:
+		"""
+		python3 scripts/phylogroup_comparison.py {params.threshold} {input.snpcomparisons} {output} 2>&1>{log}
+		"""
+

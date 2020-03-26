@@ -5,8 +5,9 @@ import pandas as pd
 
 T1 = float(sys.argv[1])
 T2 = float(sys.argv[2])
+path_snp_comparisons = str(sys.argv[3])
 
-snp_comparisons = pd.read_csv("snp_comparison/snp_comparisons.tsv", sep = '\t')
+snp_comparisons = pd.read_csv(path_snp_comparisons, sep = '\t')
 
 snp_comparisons = snp_comparisons.query('comparison == "within_traveler_between_timepoint"')
 

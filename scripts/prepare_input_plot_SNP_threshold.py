@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 
 import pandas as pd
+import sys
 
-tbl = pd.read_csv('snp_comparison/snp_comparisons.tsv', sep = '\t')
+path_tbl = str(sys.argv[1])
+
+tbl = pd.read_csv(path_tbl, sep = '\t')
 
 print("Method", "SNP_threshold", "Comparison", "Number_isolate_pairs", sep = '\t')
 

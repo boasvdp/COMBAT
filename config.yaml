@@ -43,6 +43,10 @@ filtlong:
  target_bases: "500000000"
  keep_percent: "100"
 
-print_travelers:
+print_travelers_withST38:
  threshold_verylikely: "8"
  threshold_likely: "17"
+
+print_travelers_withoutST38:
+ threshold_verylikely: "13"
+ threshold_likely: "13"

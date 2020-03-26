@@ -3,9 +3,16 @@
 import pandas as pd
 import numpy as np
 import itertools
+import sys
+
+path_list_strains = str(sys.argv[1])
+path_snpmat_standard = str(sys.argv[2])
+path_snpmat_nogaps = str(sys.argv[3])
+path_alnlengths = str(sys.argv[4])
+path_output = str(sys.argv[5])
 
 # open list_strains.txt as list_strains
-list_strains = open("list_strains.txt", "r").read().splitlines()
+list_strains = open(path_list_strains, "r").read().splitlines()
 
 # use itertools to make all unique combinations of list_strains with itself, convert to dataframe and give column names
 combos = pd.DataFrame(list(itertools.combinations(list_strains,2)), columns = ['strain1', 'strain2'])
@@ -38,14 +45,18 @@ choices = [
 # Assign comparison types using numpy and previously defined conditions and choices
 df['comparison'] = np.select(conditions, choices, default=np.nan)
 
-snpmat_standard = pd.read_csv('snp_comparison/snp_distances_standard.tsv', sep = '\t', index_col = 0)
-snpmat_standard = snpmat_standard.stack().reset_index()
-snpmat_standard.columns = ['strain1','strain2','SNPs_not_corrected']
+# Read the files with molten SNPs (standard and no gaps) and alignment lengths
+snpmat_standard = pd.read_csv(path_snpmat_standard, sep = '\t', names = ['strain1','strain2','SNPs_not_corrected'])
+snpmat_nogaps = pd.read_csv(path_snpmat_nogaps, sep = '\t', names = ['strain1','strain2','SNPs_no_gaps'])
+alnlengths = pd.read_csv(path_alnlengths, sep = '\t', names = ['strain1','strain2','alignment_length'])
 
-snpmat_nogaps = pd.read_csv('snp_comparison/snp_distances_no_gaps.tsv', sep = '\t', index_col = 0)
-snpmat_nogaps = snpmat_nogaps.stack().reset_index()
-snpmat_nogaps.columns = ['strain1','strain2','SNPs_nogaps']
-
-snp_comparisons = pd.merge(df, snpmat_nogaps, how='left', left_on=['strain1','strain2'], right_on = ['strain1','strain2'])
+# Merge the SNP and aln lengths data with the traveler/strain metadata
+snp_comparisons = pd.merge(df, alnlengths, how='left', left_on=['strain1','strain2'], right_on = ['strain1','strain2'])
+snp_comparisons = pd.merge(snp_comparisons, snpmat_nogaps, how='left', left_on=['strain1','strain2'], right_on = ['strain1','strain2'])
 snp_comparisons = pd.merge(snp_comparisons, snpmat_standard, how='left', left_on=['strain1','strain2'], right_on = ['strain1','strain2'])
-snp_comparisons.to_csv('snp_comparisons_intermediate.tsv', sep ='\t', index=False)
+
+# Calculate SNPs per mbp
+snp_comparisons['SNPs_corrected'] = (snp_comparisons['SNPs_not_corrected'] / snp_comparisons['alignment_length']) * 1000000
+
+# Write to output tsv file
+snp_comparisons.to_csv(path_output, sep ='\t', index=False)
