@@ -49,4 +49,4 @@ print_travelers_withST38:
 
 print_travelers_withoutST38:
  threshold_verylikely: "13"
- threshold_likely: "13"
+ threshold_likely: "17"

@@ -30,7 +30,8 @@ rule all:
 		expand("controls/mlst/{sample}.tsv", sample=CONTROLS),
 		"controls/multiqc_out/multiqc_fastp.html",
 		"phylogroup_comparison_withST38.tsv",
-		"phylogroup_comparison_withoutST38.tsv"
+		"phylogroup_comparison_withoutST38.tsv",
+		"phylogroup_comparison.pdf"
 
 ### STANDARD PIPELINE
 
@@ -850,7 +851,8 @@ rule comparison_phylogroups_withST38:
 		phylo_summary_controls = "ezclermont_summary_controls.tsv",
 		travelers = "traveler_persistence_types_withST38.tsv"
 	output:
-		"phylogroup_comparison_withST38.tsv"
+		plotdata = "phylogroup_comparison_plotdata_withST38.tsv",
+		final = "phylogroup_comparison_withST38.tsv"
 	conda:
 		"envs/snp_comparisons.yaml"
 	params:
@@ -859,7 +861,7 @@ rule comparison_phylogroups_withST38:
 		"logs/phylogroup_comparison.log"
 	shell:
 		"""
-		python3 scripts/phylogroup_comparison.py {params.threshold} {input.snpcomparisons} {output} 2>&1>{log}
+		python3 scripts/phylogroup_comparison.py {params.threshold} {input.snpcomparisons} {input.phylo_summary} {input.phylo_summary_controls} {input.metadata_controls} {output.plotdata} {output.final} 2>&1>{log}
 		"""
 
 rule comparison_phylogroups_withoutST38:
@@ -871,7 +873,8 @@ rule comparison_phylogroups_withoutST38:
 		phylo_summary_controls = "ezclermont_summary_controls.tsv",
 		travelers = "traveler_persistence_types_withoutST38.tsv"
 	output:
-		"phylogroup_comparison_withoutST38.tsv"
+		plotdata = "phylogroup_comparison_plotdata_withoutST38.tsv",
+		final = "phylogroup_comparison_withoutST38.tsv"
 	conda:
 		"envs/snp_comparisons.yaml"
 	params:
@@ -880,6 +883,19 @@ rule comparison_phylogroups_withoutST38:
 		"logs/phylogroup_comparison.log"
 	shell:
 		"""
-		python3 scripts/phylogroup_comparison.py {params.threshold} {input.snpcomparisons} {output} 2>&1>{log}
+		python3 scripts/phylogroup_comparison.py {params.threshold} {input.snpcomparisons} {input.phylo_summary} {input.phylo_summary_controls} {input.metadata_controls} {output.plotdata} {output.final} 2>&1>{log}
 		"""
 
+rule plot_phylogroup_comparison:
+	input:
+		"phylogroup_comparison_plotdata_withoutST38.tsv"
+	output:
+		"phylogroup_comparison.pdf"
+	conda:
+		"envs/snp_comparisons.yaml"
+	log:
+		"logs/plot_phylogroup_comparison.log"
+	shell:
+		"""
+		Rscript scripts/plot_phylogroup_comparison.R {input} {output}
+		"""
