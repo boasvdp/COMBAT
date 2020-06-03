@@ -29,11 +29,8 @@ masked_withST38.aln
 mlst
 mlst_summary.tsv
 multiqc_out
-phylogroup_comparison_withST38.pdf
-phylogroup_comparison_withoutST38.pdf	
-phylogroup_comparison_plotdata_withoutST38.tsv
-phylogroup_comparison_withoutST38.tsv
-phylogroup_comparison_withST38.tsv
+phylogroup_comparison*pdf
+phylogroup_comparison*tsv
 prokka_out
 quast_out
 raw_illumina
