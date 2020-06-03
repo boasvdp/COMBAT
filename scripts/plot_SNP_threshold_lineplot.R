@@ -1,11 +1,18 @@
+#!/usr/bin/env Rscript
+
+# Read command line arguments
+args = commandArgs(trailingOnly=TRUE)
+
 library(reshape2)
 library(ggplot2)
 
+output_basename <- args[3]
+
 ##### withST38 #####
+output_name = paste(output_basename, "_thresholds_lineplot_withST38.pdf", sep = "")
+pdf(file = output_name, height = 6, width = 11)
 
-pdf(file = "snp_comparison/snp_comparisons_thresholds_lineplot_withST38.pdf", height = 6, width = 11)
-
-df <- read.delim("snp_comparison/input_plot_SNP_threshold_withST38.tsv")
+df <- read.delim(args[1])
 
 df_casted <- dcast(df, formula = SNP_threshold + Method ~ Comparison)
 
@@ -23,10 +30,10 @@ ggplot(df_casted, aes(x = between_traveler, y = within_traveler_within_timepoint
 dev.off()
 
 ##### withoutST38 #####
+output_name = paste(output_basename, "_thresholds_lineplot_withoutST38.pdf", sep = "")
+pdf(file = output_name, height = 6, width = 11)
 
-pdf(file = "snp_comparison/snp_comparisons_thresholds_lineplot_withoutST38.pdf", height = 6, width = 11)
-
-df <- read.delim("snp_comparison/input_plot_SNP_threshold_withoutST38.tsv")
+df <- read.delim(args[2])
 
 df_casted <- dcast(df, formula = SNP_threshold + Method ~ Comparison)
 

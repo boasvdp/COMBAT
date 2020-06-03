@@ -1,6 +1,7 @@
 abricate_out
 abricate_summary
 all_reads
+alternative_references
 amrfinder_nanopore_out
 amrfinder_out
 clonalframeml_withoutST38_out
@@ -28,7 +29,8 @@ masked_withST38.aln
 mlst
 mlst_summary.tsv
 multiqc_out
-phylogroup_comparison.pdf
+phylogroup_comparison_withST38.pdf
+phylogroup_comparison_withoutST38.pdf	
 phylogroup_comparison_plotdata_withoutST38.tsv
 phylogroup_comparison_withoutST38.tsv
 phylogroup_comparison_withST38.tsv

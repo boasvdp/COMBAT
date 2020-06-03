@@ -31,7 +31,8 @@ rule all:
 		"controls/multiqc_out/multiqc_fastp.html",
 		"phylogroup_comparison_withST38.tsv",
 		"phylogroup_comparison_withoutST38.tsv",
-		"phylogroup_comparison.pdf"
+		"phylogroup_comparison_withST38.pdf",
+		"phylogroup_comparison_withoutST38.pdf"
 
 ### STANDARD PIPELINE
 
@@ -278,9 +279,9 @@ rule snippy:
 	input:
 		fw = "trimmed_illumina/{sample}_1_AT_QT.fastq.gz",
 		rv = "trimmed_illumina/{sample}_2_AT_QT.fastq.gz",
-		ref = "references/ATCC25922.gbk"
+		ATCC25922 = config["snippy"]["ATCC25922_ST69"]
 	output:
-		directory("snippy_out/{sample}")
+		ATCC25922 = directory("snippy_out/{sample}")
 	conda:
 		"envs/snippy.yaml"
 	params:
@@ -290,7 +291,7 @@ rule snippy:
 	threads: 8
 	shell:
 		"""
-		snippy {params.general} --cpus {threads} --outdir {output} --ref {input.ref} --pe1 {input.fw} --pe2 {input.rv} 2>{log}
+		snippy {params.general} --cpus {threads} --outdir {output.ATCC25922} --ref {input.ATCC25922} --pe1 {input.fw} --pe2 {input.rv} 2>{log}
 		"""
 
 ### SNP COMPARISONS
@@ -886,11 +887,11 @@ rule comparison_phylogroups_withoutST38:
 		python3 scripts/phylogroup_comparison.py {params.threshold} {input.snpcomparisons} {input.phylo_summary} {input.phylo_summary_controls} {input.metadata_controls} {output.plotdata} {output.final} 2>&1>{log}
 		"""
 
-rule plot_phylogroup_comparison:
+rule plot_phylogroup_comparison_withoutST38:
 	input:
 		"phylogroup_comparison_plotdata_withoutST38.tsv"
 	output:
-		"phylogroup_comparison.pdf"
+		"phylogroup_comparison_withoutST38.pdf"
 	conda:
 		"envs/snp_comparisons.yaml"
 	log:

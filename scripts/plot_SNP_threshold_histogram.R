@@ -1,13 +1,20 @@
 #!/usr/bin/env Rscript
+
+# Read command line arguments
+args = commandArgs(trailingOnly=TRUE)
+
+
 library(ggplot2)
 
-snp_comparisons_withST38 <- read.delim("snp_comparison/snp_comparisons_withST38.tsv")
-snp_comparisons_withoutST38 <- read.delim("snp_comparison/snp_comparisons_withoutST38.tsv")
+snp_comparisons_withST38 <- read.delim(args[1])
+snp_comparisons_withoutST38 <- read.delim(args[2])
+output_basename <- args[3]
 
 ##### with ST38 #####
 
 ### Plot 0-50 SNPs
-pdf(file = "snp_comparison/snp_comparison_histogram_corrected_50_withST38.pdf", height = 6, width = 10)
+output_name = paste(output_basename, "_histogram_corrected_50_withST38.pdf", sep = "")
+pdf(file = output_name, height = 6, width = 10)
 
 ggplot(snp_comparisons_withST38, aes(x = SNPs_corrected, fill = comparison)) +
 	geom_histogram(bins = 50) +
@@ -18,7 +25,8 @@ ggplot(snp_comparisons_withST38, aes(x = SNPs_corrected, fill = comparison)) +
 dev.off()
 
 ### Plot 0-500 SNPs
-pdf(file = "snp_comparison/snp_comparison_histogram_corrected_500_withST38.pdf", height = 6, width = 10)
+output_name = paste(output_basename, "_histogram_corrected_500_withST38.pdf", sep = "")
+pdf(file = output_name, height = 6, width = 10)
 
 ggplot(snp_comparisons_withST38, aes(x = SNPs_corrected, fill = comparison)) +
 	geom_histogram(bins = 100) +
@@ -29,7 +37,8 @@ ggplot(snp_comparisons_withST38, aes(x = SNPs_corrected, fill = comparison)) +
 dev.off()
 
 ### Plot all SNPs
-pdf(file = "snp_comparison/snp_comparison_histogram_corrected_full_withST38.pdf", height = 6, width = 20)
+output_name = paste(output_basename, "_histogram_corrected_all_withST38.pdf", sep = "")
+pdf(file = output_name, height = 6, width = 20)
 
 ggplot(snp_comparisons_withST38, aes(x = SNPs_corrected, fill = comparison)) +
 	geom_histogram(bins = 100) +
@@ -40,7 +49,8 @@ ggplot(snp_comparisons_withST38, aes(x = SNPs_corrected, fill = comparison)) +
 dev.off()
 
 ### Plot 0-50 SNPs
-pdf(file = "snp_comparison/snp_comparison_histogram_not_corrected_50_withST38.pdf", height = 6, width = 10)
+output_name = paste(output_basename, "_histogram_not_corrected_50_withST38.pdf", sep = "")
+pdf(file = output_name, height = 6, width = 10)
 
 ggplot(snp_comparisons_withST38, aes(x = SNPs_not_corrected, fill = comparison)) +
 	geom_histogram(bins = 50) +
@@ -51,7 +61,8 @@ ggplot(snp_comparisons_withST38, aes(x = SNPs_not_corrected, fill = comparison))
 dev.off()
 
 ### Plot 0-500 SNPs
-pdf(file = "snp_comparison/snp_comparison_histogram_not_corrected_500_withST38.pdf", height = 6, width = 10)
+output_name = paste(output_basename, "_histogram_not_corrected_500_withST38.pdf", sep = "")
+pdf(file = output_name, height = 6, width = 10)
 
 ggplot(snp_comparisons_withST38, aes(x = SNPs_not_corrected, fill = comparison)) +
 	geom_histogram(bins = 100) +
@@ -62,7 +73,8 @@ ggplot(snp_comparisons_withST38, aes(x = SNPs_not_corrected, fill = comparison))
 dev.off()
 
 ### Plot all SNPs
-pdf(file = "snp_comparison/snp_comparison_histogram_not_corrected_full_withST38.pdf", height = 6, width = 20)
+output_name = paste(output_basename, "_histogram_not_corrected_all_withST38.pdf", sep = "")
+pdf(file = output_name, height = 6, width = 20)
 
 ggplot(snp_comparisons_withST38, aes(x = SNPs_not_corrected, fill = comparison)) +
 	geom_histogram(bins = 100) +
@@ -75,7 +87,8 @@ dev.off()
 ##### Without ST38 #####
 
 ### Plot 0-50 SNPs
-pdf(file = "snp_comparison/snp_comparison_histogram_corrected_50_withoutST38.pdf", height = 6, width = 10)
+output_name = paste(output_basename, "_histogram_corrected_50_withoutST38.pdf", sep = "")
+pdf(file = output_name, height = 6, width = 10)
 
 ggplot(snp_comparisons_withoutST38, aes(x = SNPs_corrected, fill = comparison)) +
 	geom_histogram(bins = 50) +
@@ -86,7 +99,8 @@ ggplot(snp_comparisons_withoutST38, aes(x = SNPs_corrected, fill = comparison)) 
 dev.off()
 
 ### Plot 0-500 SNPs
-pdf(file = "snp_comparison/snp_comparison_histogram_corrected_500_withoutST38.pdf", height = 6, width = 10)
+output_name = paste(output_basename, "_histogram_corrected_500_withoutST38.pdf", sep = "")
+pdf(file = output_name, height = 6, width = 10)
 
 ggplot(snp_comparisons_withoutST38, aes(x = SNPs_corrected, fill = comparison)) +
 	geom_histogram(bins = 100) +
@@ -97,7 +111,8 @@ ggplot(snp_comparisons_withoutST38, aes(x = SNPs_corrected, fill = comparison)) 
 dev.off()
 
 ### Plot all SNPs
-pdf(file = "snp_comparison/snp_comparison_histogram_corrected_full_withoutST38.pdf", height = 6, width = 20)
+output_name = paste(output_basename, "_histogram_corrected_all_withoutST38.pdf", sep = "")
+pdf(file = output_name, height = 6, width = 20)
 
 ggplot(snp_comparisons_withoutST38, aes(x = SNPs_corrected, fill = comparison)) +
 	geom_histogram(bins = 100) +
@@ -108,7 +123,8 @@ ggplot(snp_comparisons_withoutST38, aes(x = SNPs_corrected, fill = comparison)) 
 dev.off()
 
 ### Plot 0-50 SNPs
-pdf(file = "snp_comparison/snp_comparison_histogram_not_corrected_50_withoutST38.pdf", height = 6, width = 10)
+output_name = paste(output_basename, "_histogram_not_corrected_50_withoutST38.pdf", sep = "")
+pdf(file = output_name, height = 6, width = 10)
 
 ggplot(snp_comparisons_withoutST38, aes(x = SNPs_not_corrected, fill = comparison)) +
 	geom_histogram(bins = 50) +
@@ -119,7 +135,8 @@ ggplot(snp_comparisons_withoutST38, aes(x = SNPs_not_corrected, fill = compariso
 dev.off()
 
 ### Plot 0-500 SNPs
-pdf(file = "snp_comparison/snp_comparison_histogram_not_corrected_500_withoutST38.pdf", height = 6, width = 10)
+output_name = paste(output_basename, "_histogram_not_corrected_500_withoutST38.pdf", sep = "")
+pdf(file = output_name, height = 6, width = 10)
 
 ggplot(snp_comparisons_withoutST38, aes(x = SNPs_not_corrected, fill = comparison)) +
 	geom_histogram(bins = 100) +
@@ -130,7 +147,8 @@ ggplot(snp_comparisons_withoutST38, aes(x = SNPs_not_corrected, fill = compariso
 dev.off()
 
 ### Plot all SNPs
-pdf(file = "snp_comparison/snp_comparison_histogram_not_corrected_full_withoutST38.pdf", height = 6, width = 20)
+output_name = paste(output_basename, "_histogram_not_corrected_all_withoutST38.pdf", sep = "")
+pdf(file = output_name, height = 6, width = 20)
 
 ggplot(snp_comparisons_withoutST38, aes(x = SNPs_not_corrected, fill = comparison)) +
 	geom_histogram(bins = 100) +

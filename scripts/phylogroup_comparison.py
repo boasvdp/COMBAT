@@ -37,14 +37,29 @@ metadata_controls = pd.read_csv(path_metadata_controls, sep = '\t')
 ezclermont_controls = pd.read_csv(path_ezclermont_controls, sep  = '\t', names = ["strain", "phylogroup"])
 
 # For travelers in the metadata dataframe, get corresponding phylogroups
-ezclermont_controls_travelers = pd.merge(left = ezclermont_controls, right = metadata_controls, on = 'strain')
+metadata_controls = pd.merge(left = metadata_controls, right = ezclermont_controls, left_on = 'strain', right_on = 'strain')
+
+# Initiate empty dataframe to append short-term data to
+phylogroups_shortterm = pd.DataFrame(columns = ['phylogroup'])
+
+# Loop over short-term carriers and get phylogroups per traveler. If multiple phylogroups were acquired by a traveler, write 'Multiple'. Then append to empty dataframe.
+for t in metadata_controls.traveler.unique():
+    phylo = list(metadata_controls[metadata_controls['traveler'] == t].phylogroup.unique())
+    if len(phylo) > 1:
+        phylo = 'Multiple'
+    else:
+        phylo = str(phylo).strip('[]\'')
+    phylogroups_shortterm = phylogroups_shortterm.append({'phylogroup': phylo}, ignore_index=True)
 
 # Take only the phylogroup counts from both dataframes, and add a column which specifies long/short term
 phylogroups_longterm = pd.DataFrame(snp_comparisons_clonal["phylogroup"]).assign(type='longterm')
-phylogroups_shortterm = pd.DataFrame(ezclermont_controls_travelers["phylogroup"]).assign(type='shortterm')
+phylogroups_shortterm = pd.DataFrame(phylogroups_shortterm["phylogroup"]).assign(type='shortterm')
 
 # Append dataframes
 phylogroups = phylogroups_longterm.append(phylogroups_shortterm)
+
+# Change EzClermont output 'cryptic' to the more descriptive 'Cryptic clade'
+phylogroups = phylogroups.replace('cryptic', 'Cryptic clade')
 
 # Write data to plot to file
 plotdata = pd.DataFrame(columns = ['type', 'phylogroup', 'count'])

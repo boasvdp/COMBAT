@@ -32,6 +32,9 @@ prokka:
 
 snippy:
  general: "--force --cleanup"
+ ATCC25922_ST69: "references/ATCC25922.gbk"
+ K12_ST10: "references/K12.gbk"
+ DSM30083_ST95: "references/DSM30083.gbk"
 
 snippycore:
  prefix: "COMBAT"
