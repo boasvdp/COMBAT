@@ -13,6 +13,7 @@ ESBL_contigs
 ESBL_contigs_annotations
 ezclermont_out
 ezclermont_summary_controls.tsv
+ezclermont_summary_controls_withST38.tsv
 ezclermont_summary.tsv
 fastp_out
 fastqc_out
