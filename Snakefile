@@ -2,19 +2,19 @@ configfile: "config.yaml"
 
 import pandas as pd
 
-# Read the MLSTs from the provided summary file
-df = pd.read_csv('mlst_summary.tsv', sep = '\t')
+# Read isolate list, ST38 excluded
+df = pd.read_csv('lists/list_isolates_withoutST38.txt', sep = '\t')
+WITHOUTST38 = tuple(df)
 
-# Check which entries are not ST38
-notST38 = df['st']!='38'
-
-# Make tuple out of non-ST38 strains
-WITHOUTST38 = tuple(df[notST38].strain)
+# Read control isolate list, ST38 excluded
+df_controls = pd.read_csv('lists/list_isolates_controls_withoutST38.txt', sep = '\t')
+CONTROLSWITHOUTST38 = tuple(df_controls)
 
 # Other ID tuples can be globbed from input dirs
 NANOPORE, = glob_wildcards("raw_nanopore/{id}.fastq.gz")
 WITHST38, = glob_wildcards("raw_illumina/{id}_1.fastq.gz")
-CONTROLS, = glob_wildcards("controls/raw_illumina/{id}_1.fastq.gz")
+#CONTROLS, = glob_wildcards("controls/raw_illumina/{id}_1.fastq.gz")
+CONTROLSWITHST38, = glob_wildcards("controls/raw_illumina/{id}_1.fastq.gz")
 
 rule all:
 	input:
@@ -26,8 +26,8 @@ rule all:
 		"abricate_summary/summary_ncbi.tsv",
 		expand("fastqc_out/{sample}", sample=NANOPORE),
 		expand("ESBL_contigs_annotations/{sample}", sample=NANOPORE),
-		expand("controls/kraken_out/{sample}_kraken2_report.txt", sample=CONTROLS),
-		expand("controls/mlst/{sample}.tsv", sample=CONTROLS),
+		expand("controls/kraken_out/{sample}_kraken2_report.txt", sample=CONTROLSWITHOUTST38),
+		expand("controls/mlst/{sample}.tsv", sample=CONTROLSWITHOUTST38),
 		"controls/multiqc_out/multiqc_fastp.html",
 		"phylogroup_comparison_withST38.tsv",
 		"phylogroup_comparison_withoutST38.tsv",
@@ -506,8 +506,8 @@ rule snp_comparisons:
 		snpmatstandard_withoutST38 = "snp_comparison/snp_distances_standard_withoutST38.tsv",
 		snpmatnogaps_withoutST38 = "snp_comparison/snp_distances_no_gaps_withoutST38.tsv",
 		metadata = "COMBAT_metadata.tsv",
-		list_withST38 = "list_strains_withST38.txt",
-		list_withoutST38 = "list_strains_withoutST38.txt",
+		list_withST38 = "lists/list_isolates_withST38.txt",
+		list_withoutST38 = "lists/list_isolates_withoutST38.txt",
 		alnlengths_withST38 = "snp_comparison/alnlengths_withST38.tsv",
 		alnlengths_withoutST38 = "snp_comparison/alnlengths_withoutST38.tsv"
 	output:
@@ -807,8 +807,8 @@ rule ezclermont_controls:
 
 rule multiqc_controls:
 	input:
-		fastp = expand("controls/fastp_out/json/{sample}_AT_QT_fastp.json", sample=CONTROLS),
-		quast = expand("controls/quast_out/{sample}", sample=CONTROLS)
+		fastp = expand("controls/fastp_out/json/{sample}_AT_QT_fastp.json", sample=CONTROLSWITHOUTST38),
+		quast = expand("controls/quast_out/{sample}", sample=CONTROLSWITHOUTST38)
 	output:
 		fastp = "controls/multiqc_out/multiqc_fastp.html",
 		quast = "controls/multiqc_out/multiqc_quast.html",
@@ -833,7 +833,7 @@ rule multiqc_controls:
 
 rule ezclermont_summary_controls:
 	input:
-		expand("controls/ezclermont_out/{sample}.tsv", sample=CONTROLS)
+		expand("controls/ezclermont_out/{sample}.tsv", sample=CONTROLSWITHOUTST38)
 	output:
 		"ezclermont_summary_controls.tsv"
 	log:
@@ -843,13 +843,26 @@ rule ezclermont_summary_controls:
 		cat {input} 1> {output} 2>{log}
 		"""
 
+rule ezclermont_summary_controls_withST38:
+	input:
+		expand("controls/ezclermont_out/{sample}.tsv", sample=CONTROLSWITHST38)
+	output:
+		"ezclermont_summary_controls_withST38.tsv"
+	log:
+		"logs/ezclermont_summary_controls_withST38.log"
+	shell:
+		"""
+		cat {input} 1> {output} 2>{log}
+		"""
+
+
 rule comparison_phylogroups_withST38:
 	input:
 		snpcomparisons = "snp_comparison/snp_comparisons_withST38.tsv",
 		metadata = "COMBAT_metadata.tsv",
 		metadata_controls = "COMBAT_metadata_controls.tsv",
 		phylo_summary = "ezclermont_summary.tsv",
-		phylo_summary_controls = "ezclermont_summary_controls.tsv",
+		phylo_summary_controls = "ezclermont_summary_controls_withST38.tsv",
 		travelers = "traveler_persistence_types_withST38.tsv"
 	output:
 		plotdata = "phylogroup_comparison_plotdata_withST38.tsv",
@@ -899,4 +912,18 @@ rule plot_phylogroup_comparison_withoutST38:
 	shell:
 		"""
 		Rscript scripts/plot_phylogroup_comparison.R {input} {output}
+		"""
+
+rule plot_phylogroup_comparison_withST38:
+	input:
+		"phylogroup_comparison_plotdata_withST38.tsv"
+	output:
+		"phylogroup_comparison_withST38.pdf"
+	conda:
+		"envs/snp_comparisons.yaml"
+	log:
+		"logs/plot_phylogroup_comparison.log"
+	shell:
+		"""
+		Rscript scripts/plot_phylogroup_comparison_withST38.R {input} {output}
 		"""

@@ -21,8 +21,7 @@ genomes
 iqtree_withoutST38_out
 iqtree_withST38_out
 kraken_out
-list_strains_withoutST38.txt
-list_strains_withST38.txt
+lists/*
 logs
 masked_withoutST38.aln
 masked_withST38.aln
