@@ -6,8 +6,6 @@ amrfinder_nanopore_out
 amrfinder_out
 clonalframeml_withoutST38_out
 clonalframeml_withST38_out
-COMBAT_metadata_controls.tsv
-COMBAT_metadata.tsv
 controls
 ESBL_contigs
 ESBL_contigs_annotations
