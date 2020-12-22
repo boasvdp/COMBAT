@@ -1,0 +1,462 @@
+configfile: "config.yaml"
+
+#import pandas as pd
+
+# Read isolate list, ST38 excluded
+#df = pd.read_csv('lists/list_isolates_withoutST38.txt', sep = '\t')
+#WITHOUTST38 = tuple(df)
+
+# Read control isolate list, ST38 excluded
+#df_controls = pd.read_csv('lists/list_isolates_controls_withoutST38.txt', sep = '\t')
+#CONTROLSWITHOUTST38 = tuple(df_controls)
+
+# Other ID tuples can be globbed from input dirs
+ALLSAMPLES, = glob_wildcards("trimmed_illumina/{id}_1_AT_QT.fastq.gz")
+#ALLSAMPLES = ['COMB0108', 'COMB0109', 'COMB0142', 'COMB0143', 'COMB0144', 'COMB0177', 'COMB0206', 'COMB0207', 'COMB0291', 'COMB0358', 'COMB0359', 'COMB0534', 'COMB0535']
+CONTROLS, = glob_wildcards("controls/raw_illumina/{id}_1.fastq.gz")
+#CONTROLSALLSAMPLES, = glob_wildcards("controls/raw_illumina/{id}_1.fastq.gz")
+
+#print(ALLSAMPLES)
+
+rule all:
+	input:
+		expand("kraken_out/{sample}_kraken2_report.txt", sample=ALLSAMPLES),
+		expand("amrfinder_out/{sample}.tsv", sample=ALLSAMPLES),
+		expand("prokka_out/{sample}", sample=ALLSAMPLES),
+		"multiqc_out/multiqc_fastp.html",
+		"abricate_summary/summary_ncbi.tsv",
+		expand("referenceseeker_out/{sample}.tsv", sample=ALLSAMPLES),
+		expand("controls/kraken_out/{sample}_kraken2_report.txt", sample=CONTROLS),
+		"controls/multiqc_out/multiqc_fastp.html",
+		"mlst_summary.tsv",
+		"mlst_summary_controls.tsv",
+
+### STANDARD PIPELINE
+
+rule fastp:
+	input:
+		fw = "raw_illumina/{sample}_1.fastq.gz",
+		rv = "raw_illumina/{sample}_2.fastq.gz"
+	output:
+		fw = "trimmed_illumina/{sample}_1_AT_QT.fastq.gz",
+		rv = "trimmed_illumina/{sample}_2_AT_QT.fastq.gz",
+		html = "fastp_out/html/{sample}_AT_QT_fastp.html",
+		json = "fastp_out/json/{sample}_AT_QT_fastp.json"
+	conda:
+		"envs/fastp.yaml"
+	params:
+		compression_level = config["fastp"]["compression_level"],
+		general = config["fastp"]["general"]
+	log:
+		"logs/fastp/{sample}.log"
+	threads: 8
+	shell:
+		"""
+		fastp -w {threads} -z {params.compression_level} -i {input.fw} -o {output.fw} -I {input.rv} -O {output.rv} {params.general} --html {output.html} --json {output.json} 2>&1>{log}
+		"""
+
+rule kraken2:
+	input:
+		fw = "trimmed_illumina/{sample}_1_AT_QT.fastq.gz",
+		rv = "trimmed_illumina/{sample}_2_AT_QT.fastq.gz"
+	output:
+		report = "kraken_out/{sample}_kraken2_report.txt"
+	conda:
+		"envs/kraken.yaml"
+	params:
+		general = config["kraken"]["general"],
+		db = config["kraken"]["db"]
+	log:
+		"logs/kraken2/{sample}.log"
+	threads: 8
+	shell:
+		"""
+		kraken2 --db {params.db} {params.general} --threads {threads} --report {output.report} {input.fw} {input.rv} 2>&1>{log}
+		"""
+
+rule shovill:
+	input:
+		fw = "trimmed_illumina/{sample}_1_AT_QT.fastq.gz",
+		rv = "trimmed_illumina/{sample}_2_AT_QT.fastq.gz"
+	output:
+		assembly = "genomes/{sample}.fasta",
+		shovill = directory("shovill_out/{sample}")
+	params:
+		minlen = config["shovill"]["minlen"],
+		ram = config["shovill"]["ram"],
+		depth = config["shovill"]["depth"],
+		assembler = config["shovill"]["assembler"],
+		tmpdir = config["shovill"]["tmpdir"]
+	conda:
+		"envs/shovill.yaml"
+	log:
+		"logs/shovill/{sample}.log"
+	threads: 16
+	shell:
+		"""
+		shovill --assembler {params.assembler} --outdir {output.shovill} --tmp {params.tmpdir} --depth {params.depth} --cpus {threads} --ram {params.ram} --minlen {params.minlen} --R1 {input.fw} --R2 {input.rv} 2>&1>{log}
+		cp {output.shovill}/contigs.fa {output.assembly}
+		"""
+
+rule quast:
+	input:
+		"genomes/{sample}.fasta"
+	output:
+		directory("quast_out/{sample}")
+	conda:
+		"envs/quast.yaml"
+	log:
+		"logs/quast/{sample}.log"
+	threads: 8
+	shell:
+		"""
+		quast --threads {threads} -o {output} {input} 2>&1>{log}
+		"""
+
+rule abricate:
+	input:
+		assembly = "genomes/{sample}.fasta"
+	output:	
+		ncbi = "abricate_out/ncbi/{sample}_ncbi.tsv",
+		vfdb = "abricate_out/vfdb/{sample}_vfdb.tsv",
+		plasmidfinder = "abricate_out/plasmidfinder/{sample}_plasmidfinder.tsv",
+		ecoh = "abricate_out/ecoh/{sample}_ecoh.tsv"
+	conda:
+		"envs/abricate.yaml"
+	params:
+		minid = config["abricate"]["minid"],
+		mincov = config["abricate"]["mincov"],
+		ncbi = config["abricate"]["ncbi"],
+		vfdb = config["abricate"]["vfdb"],
+		plasmidfinder = config["abricate"]["plasmidfinder"],
+		ecoh = config["abricate"]["ecoh"]
+	log:
+		"logs/abricate/{sample}.log"
+	threads: 8
+	shell:
+		"""
+		abricate --db {params.ncbi} --nopath --minid {params.minid} --mincov {params.mincov} {input.assembly} > {output.ncbi} 2>>{log}
+		abricate --db {params.vfdb} --nopath --minid {params.minid} --mincov {params.mincov} {input.assembly} > {output.vfdb} 2>>{log}
+		abricate --db {params.plasmidfinder} --nopath --minid {params.minid} --mincov {params.mincov} {input.assembly} > {output.plasmidfinder} 2>>{log}
+		abricate --db {params.ecoh} --nopath --minid {params.minid} --mincov {params.mincov} {input.assembly} > {output.ecoh} 2>>{log}
+		"""
+
+rule amrfinder:
+	input:
+		"genomes/{sample}.fasta"
+	output:
+		"amrfinder_out/{sample}.tsv"
+	conda:
+		"envs/amrfinder.yaml"
+	params:
+		organism = config["amrfinder"]["organism"]
+	log:
+		"logs/amrfinder/{sample}.log"
+	threads: 16
+	shell:
+		"""
+		amrfinder -u
+		amrfinder --threads {threads} --nucleotide {input} --organism {params.organism} --output {output} 2>&1>{log}
+		"""
+
+rule mlst:
+	input:
+		"genomes/{sample}.fasta"
+	output:
+		"mlst/{sample}.tsv"
+	conda:
+		"envs/mlst.yaml"
+	log:
+		"logs/mlst/{sample}.log"
+	shell:
+		"""
+		mlst {input} > {output} 2>>{log}
+		"""
+
+rule mlst_summary:
+	input:
+		expand("mlst/{sample}.tsv", sample=ALLSAMPLES)
+	output:
+		"mlst_summary.tsv"
+	log:
+		"logs/mlst_summary.log"
+	shell:
+		"""
+		bash scripts/mlst_summary.sh {input} > {output}
+		"""
+
+rule prokka:
+	input:
+		"genomes/{sample}.fasta"
+	output:
+		directory("prokka_out/{sample}")
+	conda:
+		"envs/prokka.yaml"
+	params:
+		general = config["prokka"]["general"],
+		kingdom = config["prokka"]["kingdom"],
+		genus = config["prokka"]["genus"],
+		species = config["prokka"]["species"],
+		prefix = "{sample}"
+	log:
+		"logs/prokka/{sample}.log"
+	threads: 8
+	shell:
+		"""
+		prokka {params.general} --force --outdir {output} --genus {params.genus} --species {params.species} --kingdom {params.kingdom} --cpus {threads} --prefix {params.prefix} {input} 2>&1>{log}
+		if [ -f {output}/*.gff ]; then echo "{output} exists"; else exit 1; fi
+		"""
+
+rule ezclermont:
+	input:
+		"genomes/{sample}.fasta"
+	output:
+		"ezclermont_out/{sample}.tsv"
+	conda:
+		"envs/ezclermont.yaml"
+	log:
+		"logs/ezclermont/{sample}.log"
+	shell:
+		"""
+		set +e
+		ezclermont {input} 1>{output} 2>{log} || true
+		"""
+
+rule ezclermont_summary:
+	input:
+		expand("ezclermont_out/{sample}.tsv", sample=ALLSAMPLES)
+	output:
+		"ezclermont_summary.tsv"
+	log:
+		"logs/ezclermont_summary.log"
+	shell:
+		"""
+		cat {input} 1> {output} 2>{log}
+		"""
+
+rule multiqc:
+	input:
+		fastp = expand("fastp_out/json/{sample}_AT_QT_fastp.json", sample=ALLSAMPLES),
+		quast = expand("quast_out/{sample}", sample=ALLSAMPLES)
+	output:
+		fastp = "multiqc_out/multiqc_fastp.html",
+		quast = "multiqc_out/multiqc_quast.html",
+		fastp_data = directory("multiqc_out/multiqc_fastp_data"),
+		quast_data = directory("multiqc_out/multiqc_quast_data")
+	conda:
+		"envs/multiqc.yaml"
+	log:
+		fastp = "logs/multiqc_fastp.log",
+		quast = "logs/multiqc_quast.log"
+	shell:
+		"""
+		OUTPUT={output.fastp}
+		DIR=${{OUTPUT%/*}}
+		NAME=${{OUTPUT##*/}}
+		INPUT=$(for i in {input.fastp}; do echo ${{i%/*}}; done | sort | uniq)
+		multiqc -n ${{NAME}} -o ${{DIR}} ${{INPUT}} 2>&1>{log.fastp}
+		OUTPUT={output.quast}
+		DIR=${{OUTPUT%/*}}
+		NAME=${{OUTPUT##*/}}
+		INPUT=$(for i in {input.quast}; do echo ${{i%/*}}; done | sort | uniq)
+		multiqc -n ${{NAME}} -o ${{DIR}} ${{INPUT}} 2>&1>{log.quast}
+		"""
+
+rule abricate_summary:
+	input:
+		ncbi = expand("abricate_out/ncbi/{sample}_ncbi.tsv", sample=ALLSAMPLES),
+		vfdb = expand("abricate_out/vfdb/{sample}_vfdb.tsv", sample=ALLSAMPLES),
+		ecoh = expand("abricate_out/ecoh/{sample}_ecoh.tsv", sample=ALLSAMPLES),
+		plasmidfinder = expand("abricate_out/plasmidfinder/{sample}_plasmidfinder.tsv", sample=ALLSAMPLES)
+	output:
+		ncbi = "abricate_summary/summary_ncbi.tsv",
+		vfdb = "abricate_summary/summary_vfdb.tsv",
+		ecoh = "abricate_summary/summary_ecoh.tsv",
+		plasmidfinder = "abricate_summary/summary_plasmidfinder.tsv"
+	log:
+		"logs/abricate_summary.log"
+	shell:
+		"""
+		mkdir -p abricate_summary
+		abricate --summary {input.ncbi} > {output.ncbi} 2>>{log}
+		abricate --summary {input.vfdb} > {output.vfdb} 2>>{log}
+		abricate --summary {input.ecoh} > {output.ecoh} 2>>{log}
+		abricate --summary {input.plasmidfinder} > {output.plasmidfinder} 2>>{log}
+		"""
+
+rule referenceseeker:
+	input:
+		assembly = "genomes/{sample}.fasta",
+		db = "ecoli_referenceseeker"
+	output:
+		"referenceseeker_out/{sample}.tsv"
+	conda:
+		"envs/referenceseeker.yaml"
+	params:
+		crg = config["referenceseeker"]["crg"]
+	log:
+		"logs/referenceseeker/{sample}.log"
+	threads: 16
+	shell:
+		"""
+		referenceseeker --crg {params.crg} --threads {threads} {input.db} {input.assembly} 1> {output} 2>{log}
+		"""
+
+rule fastp_controls:
+	input:
+		fw = "controls/raw_illumina/{sample}_1.fastq.gz",
+		rv = "controls/raw_illumina/{sample}_2.fastq.gz"
+	output:
+		fw = "controls/trimmed_illumina/{sample}_1_AT_QT.fastq.gz",
+		rv = "controls/trimmed_illumina/{sample}_2_AT_QT.fastq.gz",
+		html = "controls/fastp_out/html/{sample}_AT_QT_fastp.html",
+		json = "controls/fastp_out/json/{sample}_AT_QT_fastp.json"
+	conda:
+		"envs/fastp.yaml"
+	params:
+		compression_level = config["fastp"]["compression_level"],
+		general = config["fastp"]["general"]
+	log:
+		"logs/fastp/{sample}.log"
+	threads: 8
+	shell:
+		"""
+		fastp -w {threads} -z {params.compression_level} -i {input.fw} -o {output.fw} -I {input.rv} -O {output.rv} {params.general} --html {output.html} --json {output.json} 2>&1>{log}
+		"""
+
+rule kraken2_controls:
+	input:
+		fw = "controls/trimmed_illumina/{sample}_1_AT_QT.fastq.gz",
+		rv = "controls/trimmed_illumina/{sample}_2_AT_QT.fastq.gz"
+	output:
+		report = "controls/kraken_out/{sample}_kraken2_report.txt"
+	conda:
+		"envs/kraken.yaml"
+	params:
+		general = config["kraken"]["general"],
+		db = config["kraken"]["db"]
+	log:
+		"logs/kraken2/{sample}.log"
+	threads: 8
+	shell:
+		"""
+		kraken2 --db {params.db} {params.general} --threads {threads} --report {output.report} {input.fw} {input.rv} 2>&1>{log}
+		"""
+
+rule shovill_controls:
+	input:
+		fw = "controls/trimmed_illumina/{sample}_1_AT_QT.fastq.gz",
+		rv = "controls/trimmed_illumina/{sample}_2_AT_QT.fastq.gz"
+	output:
+		assembly = "controls/genomes/{sample}.fasta",
+		shovill = directory("controls/shovill_out/{sample}")
+	params:
+		minlen = config["shovill"]["minlen"],
+		ram = config["shovill"]["ram"],
+		depth = config["shovill"]["depth"],
+		assembler = config["shovill"]["assembler"],
+		tmpdir = config["shovill"]["tmpdir"]
+	conda:
+		"envs/shovill.yaml"
+	log:
+		"logs/shovill/{sample}.log"
+	threads: 16
+	shell:
+		"""
+		shovill --assembler {params.assembler} --outdir {output.shovill} --tmp {params.tmpdir} --depth {params.depth} --cpus {threads} --ram {params.ram} --minlen {params.minlen} --R1 {input.fw} --R2 {input.rv} 2>&1>{log}
+		cp {output.shovill}/contigs.fa {output.assembly}
+		"""
+
+rule quast_controls:
+	input:
+		"controls/genomes/{sample}.fasta"
+	output:
+		directory("controls/quast_out/{sample}")
+	conda:
+		"envs/quast.yaml"
+	log:
+		"logs/quast/{sample}.log"
+	threads: 8
+	shell:
+		"""
+		quast --threads {threads} -o {output} {input} 2>&1>{log}
+		"""
+
+rule mlst_controls:
+	input:
+		"controls/genomes/{sample}.fasta"
+	output:
+		"controls/mlst/{sample}.tsv"
+	conda:
+		"envs/mlst.yaml"
+	log:
+		"logs/mlst/{sample}.log"
+	shell:
+		"""
+		mlst {input} > {output} 2>>{log}
+		"""
+
+rule mlst_summary_controls:
+        input:
+                expand("controls/mlst/{sample}.tsv", sample=CONTROLS)
+        output:
+                "mlst_summary_controls.tsv"
+        log:
+                "logs/mlst_summary_controls.log"
+        shell:
+                """
+                bash scripts/mlst_summary.sh {input} > {output}
+                """
+
+rule ezclermont_controls:
+	input:
+		"controls/genomes/{sample}.fasta"
+	output:
+		"controls/ezclermont_out/{sample}.tsv"
+	conda:
+		"envs/ezclermont.yaml"
+	log:
+		"logs/ezclermont/{sample}.log"
+	shell:
+		"""
+		set +e
+		ezclermont {input} 1>{output} 2>{log} || true
+		"""
+
+rule multiqc_controls:
+	input:
+		fastp = expand("controls/fastp_out/json/{sample}_AT_QT_fastp.json", sample=CONTROLS),
+		quast = expand("controls/quast_out/{sample}", sample=CONTROLS)
+	output:
+		fastp = "controls/multiqc_out/multiqc_fastp.html",
+		quast = "controls/multiqc_out/multiqc_quast.html",
+		fastp_data = directory("controls/multiqc_out/multiqc_fastp_data"),
+		quast_data = directory("controls/multiqc_out/multiqc_quast_data")
+	log:
+		fastp = "logs/multiqc_fastp.log",
+		quast = "logs/multiqc_quast.log"
+	shell:
+		"""
+		OUTPUT={output.fastp}
+		DIR=${{OUTPUT%/*}}
+		NAME=${{OUTPUT##*/}}
+		INPUT=$(for i in {input.fastp}; do echo ${{i%/*}}; done | sort | uniq)
+		multiqc -n ${{NAME}} -o ${{DIR}} ${{INPUT}} 2>&1>{log.fastp}
+		OUTPUT={output.quast}
+		DIR=${{OUTPUT%/*}}
+		NAME=${{OUTPUT##*/}}
+		INPUT=$(for i in {input.quast}; do echo ${{i%/*}}; done | sort | uniq)
+		multiqc -n ${{NAME}} -o ${{DIR}} ${{INPUT}} 2>&1>{log.quast}
+		"""
+
+rule ezclermont_summary_controls:
+	input:
+		expand("controls/ezclermont_out/{sample}.tsv", sample=CONTROLS)
+	output:
+		"ezclermont_summary_controls.tsv"
+	log:
+		"logs/ezclermont_summary_controls.log"
+	shell:
+		"""
+		cat {input} 1> {output} 2>{log}
+		"""

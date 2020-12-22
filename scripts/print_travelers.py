@@ -1,24 +1,46 @@
 #!/usr/bin/env python3
 
-import sys
 import pandas as pd
+import argparse
 
-T1 = float(sys.argv[1])
-T2 = float(sys.argv[2])
-path_snp_comparisons = str(sys.argv[3])
+#Parse argument
+parser = argparse.ArgumentParser(description='Combine MLST and SNP typing data to print traveler outcome.')
 
-snp_comparisons = pd.read_csv(path_snp_comparisons, sep = '\t')
+parser.add_argument('-i', '--isolate-comparisons', dest='isol', help='Isolate comparisons file', required=True, type=str)
+parser.add_argument('-t', '--threshold', dest='threshold', help='SNP threshold to use', required=True, type=int)
+parser.add_argument('-e', '--exclude-st', dest='exclude', nargs='+', help='ExPEC sequence types to ignore', required=True, type=str)
 
-snp_comparisons = snp_comparisons.query('comparison == "within_traveler_between_timepoint"')
+args = parser.parse_args()
 
-print("Traveler", "SNPs_corrected", "Type", sep = '\t')
+df = pd.read_csv(args.isol, sep = '\t')
+threshold = args.threshold
 
-for traveler in list(snp_comparisons.traveler1.drop_duplicates()):
-	min_SNPs = min(snp_comparisons.query('traveler1 == @traveler')['SNPs_corrected'])
-	if min_SNPs < T1:
-		type = "Very_likely_clonal"
-	elif min_SNPs >= T1 and min_SNPs < T2:
-		type = "Likely_clonal"
-	else:
-		type = "Not_clonal"
-	print(traveler, "%.3f" % min_SNPs, type, sep = '\t')
+print('traveler', 'MLST_verdict', 'MLST', 'SNP_verdict', 'least_SNPs_masked', 'isolate_T1', 'isolate_T5', sep = '\t')
+
+for traveler in df['traveler'].unique():
+  df_trav = df.query('traveler == @traveler')
+
+  common_ST = set(df_trav['ST_T1']) & set(df_trav['ST_T5'])
+  if len(common_ST) > 0:
+    MLST_verdict = 'Yes'
+    MLST = str(common_ST).strip('{}\'')
+    df_trav_mlst = df_trav.query('ST_T1 == @MLST & ST_T5 == @MLST')
+    least_SNPs_masked = min(df_trav_mlst['SNPs_masked_scaled'])
+    if (least_SNPs_masked <= threshold) & (MLST not in args.exclude):
+      isolate_T1 = df_trav_mlst.query('SNPs_masked_scaled == @least_SNPs_masked')[['isolate_T1']].iloc[0,0]
+      isolate_T5 = df_trav_mlst.query('SNPs_masked_scaled == @least_SNPs_masked')[['isolate_T5']].iloc[0,0]
+      SNP_verdict = 'Yes'
+    else:
+      SNP_verdict = 'No'
+      isolate_T1 = 'NA'
+      isolate_T5 = 'NA'
+
+  else:
+    MLST_verdict = 'No'
+    MLST = 'NA'
+    SNP_verdict = 'No'
+    isolate_T1 = 'NA'
+    isolate_T5 = 'NA'
+    least_SNPs_masked = 'NA'
+
+  print(traveler, MLST_verdict, MLST, SNP_verdict, least_SNPs_masked, isolate_T1, isolate_T5, sep = '\t')
