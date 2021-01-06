@@ -30,6 +30,10 @@ prokka:
  genus: "Escherichia"
  species: "coli"
 
+referenceseeker:
+ crg: 500
+ db: ecoli_referenceseeeker
+
 snippy:
  general: "--force --cleanup"
  ATCC25922_ST69: "references/ATCC25922.gbk"
@@ -53,3 +57,9 @@ print_travelers_withST38:
 print_travelers_withoutST38:
  threshold_verylikely: "13"
  threshold_likely: "17"
+ 
+combine_data:
+ threshold: 25
+
+print_travelers:
+ exclude: 38
