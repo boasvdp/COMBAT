@@ -2,32 +2,45 @@
 
 import pandas as pd
 import sys
+import argparse
 
-path_snp_comparisons = str(sys.argv[2])
-path_ezclermont = str(sys.argv[3])
-path_ezclermont_controls = str(sys.argv[4])
-path_metadata_controls = str(sys.argv[5])
-path_plot_data_out = str(sys.argv[6])
-path_output = str(sys.argv[7])
+# Parse argument
+parser = argparse.ArgumentParser(description='Print comparison of phylogroups.')
+
+parser.add_argument('--isolate-comparison', dest='isol', help='Isolate summary', required=True, type=str)
+parser.add_argument('--threshold', dest='threshold', help='SNP threshold', required=True, type=int)
+parser.add_argument('--ezclermont', dest='ezclermont', help='EzClermont summary', required=True, type=str)
+parser.add_argument('--ezclermont-controls', dest='ezclermontcontrols', help='EzClermont summary of controls', required=True, type=str)
+parser.add_argument('--metadata-controls', dest='metadatacontrols', help='Metadata of controls', required=True, type=str)
+parser.add_argument('--plot-data-out', dest='plotdataout', help='Output file for plotting data', required=True, type=str)
+parser.add_argument('--output', dest='output', help='Output file', required=True, type=str)
+
+args = parser.parse_args()
+
+path_ezclermont = args.ezclermont
+path_ezclermont_controls = args.ezclermontcontrols
+path_metadata_controls = args.metadatacontrols
+path_plot_data_out = args.plotdataout
+path_output = args.output
 
 ### For long-term colonising strains
 # Read snp_comparisons file, which will be used to find persistent strains which can be linked to phylogroups
-snp_comparisons = pd.read_csv(path_snp_comparisons, sep = '\t')
+snp_comparisons = pd.read_csv(args.isol, sep = '\t')
 
 # Read tsv file which summarises which strain is which phylogroup
 ezclermont = pd.read_csv(path_ezclermont, sep  = '\t', names = ["strain", "phylogroup"])
 
 # Set threshold for clonal persistence from argument passed from the command line. Defined in config.yaml.
-T = int(sys.argv[1])
+T = args.threshold
 
 # Find strains which have persisted based on threshold defined above
-snp_comparisons_clonal = snp_comparisons.query('comparison  == "within_traveler_between_timepoint" & SNPs_corrected <= @T')
+snp_comparisons_clonal = snp_comparisons.query('SNPs_masked_scaled != "NA"').query('SNPs_masked_scaled <= @T')
 
 # Merge dataframes: ezclermont phylogroups are added to persisting strains
-snp_comparisons_clonal = pd.merge(left = snp_comparisons_clonal, right = ezclermont, left_on = 'strain2', right_on = 'strain')
+snp_comparisons_clonal = pd.merge(left = snp_comparisons_clonal, right = ezclermont, left_on = 'isolate_T5', right_on = 'strain')
 
 # Take only the traveler and phylogroup columns, and remove duplicates to prevent inflated phylogroup numbers
-snp_comparisons_clonal = snp_comparisons_clonal[['traveler1', 'phylogroup']].drop_duplicates()
+snp_comparisons_clonal = snp_comparisons_clonal[['traveler', 'phylogroup']].drop_duplicates()
 
 ### For short-term colonising strains
 # Read the metadata file for controls

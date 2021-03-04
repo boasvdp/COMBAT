@@ -1,0 +1,308 @@
+configfile: "config.yaml"
+
+import pandas as pd
+
+#samples = pd.read_table("mlst_summary.tsv").set_index("strain", drop=False)
+#STs = ['10', '131']
+df_STs = pd.read_table("df_mapping_STs.tsv").set_index("ST", drop=False)
+STs = list(df_STs['ST'])
+
+mapping_samples = pd.read_table("mapping_samples.tsv").set_index("strain", drop=False)
+samples = list(mapping_samples['strain'])
+
+print(STs)
+print(samples)
+
+rule all:
+	input:
+#		expand("group_mlst_out/table_mapping_ST{sample}.tsv", sample=STs),
+#		expand("selected_references/reference_ST{sample}.tsv", sample=STs),
+#		"mlst_references.tsv",
+#		expand("snippy_out/{sample}", sample=samples),
+#		expand("snippy_core_out/ST{ST}/ST{ST}.aln", ST=STs),
+#		expand("maskrc_out/masked_ST{ST}.aln", ST=STs),
+#		expand("snp_comparison/snp_table_ST{ST}.tsv", ST=STs),
+#		"snp_comparison/snp_table_all.tsv",
+#		"isolate_comparisons.tsv",
+		"phylogroup_comparison.pdf",
+#		"travelers_conclusions.tsv",
+		"ExPEC_conclusions.txt"
+
+rule group_mlst:
+	input:
+		metadata = "COMBAT_metadata.tsv",
+		mlst = "mlst_summary.tsv"
+	output:
+		expand("group_mlst_out/table_mapping_ST{sample}.tsv", sample=STs)
+	conda:
+		"envs/snp_comparisons.yaml"
+	log:
+		"logs/group_mlst.log"
+	shell:
+		"""
+		OUTPUT=$(for i in {output}; do echo ${{i%%/*}}; done | sort | uniq)
+		python scripts/group_mlst.py {input.metadata} {input.mlst} $OUTPUT 2>&1>{log}
+		"""
+
+rule select_referenceseeker:
+	input:
+		table = "group_mlst_out/table_mapping_ST{sample}.tsv",
+		referenceseeker = "referenceseeker_out"
+	output:
+		"selected_references/reference_ST{sample}.tsv"
+	conda:
+		"envs/snp_comparisons.yaml"
+	log:
+		"logs/select_referenceseeker_ST{sample}.log"
+	shell:
+		"""
+		python scripts/select_referenceseeker.py {input.table} {input.referenceseeker} {output}
+		"""
+	
+rule combine_selected_references:
+	input:
+		mlst = "mlst_summary.tsv",
+		selected_references = expand("selected_references/reference_ST{sample}.tsv", sample=STs)
+	output:
+		"mlst_references.tsv"
+	conda:
+		"envs/snp_comparisons.yaml"
+	log:
+		"logs/combine_selected_references.log"
+	shell:
+		"""
+		SELECTEDREFERENCES=$(for i in {input.selected_references}; do echo ${{i%%/*}}; done | sort | uniq)
+		python scripts/combine_selected_references.py $SELECTEDREFERENCES {input.mlst} {output}
+		"""
+
+rule snippy:
+	input:
+		fw = "trimmed_illumina/{sample}_1_AT_QT.fastq.gz",
+		rv = "trimmed_illumina/{sample}_2_AT_QT.fastq.gz",
+		info = "mlst_references.tsv"
+	output:
+		directory("snippy_out/{sample}")
+	conda:
+		"envs/snippy.yaml"
+	params:
+		general = config["snippy"]["general"],
+		sample = "{sample}"
+	log:
+		"logs/snippy/{sample}.log"
+	threads: 16
+	shell:
+		"""
+		REF=$(bash scripts/print_ref.sh {params.sample} {input.info})
+		snippy {params.general} --cpus {threads} --outdir {output} --ref $REF --pe1 {input.fw} --pe2 {input.rv} 2>{log}
+		"""
+
+rule snippy_core:
+	input:
+		expand("snippy_out/{sample}", sample=samples),
+		info = "mlst_references.tsv"
+	output:
+		core = "snippy_core_out/ST{ST}/ST{ST}.aln",
+		full = "snippy_core_out/ST{ST}/ST{ST}.full.aln"
+	conda:
+		"envs/snippy.yaml"
+	log:
+		"logs/snippy_core_{ST}.log"
+	params:
+		prefix = "{ST}",
+		outdir = "snippy_core_out/ST{ST}"
+	threads: 16
+	shell:
+		"""
+		mkdir -p {params.outdir}
+		SAMPLES=$(python scripts/select_snippy_samples.py {input.info} {params.prefix} snippy_out)
+		REFERENCE=$(python scripts/select_snippy_reference.py {input.info} {params.prefix} references)
+		snippy-core --prefix ST{params.prefix} --ref $REFERENCE $SAMPLES
+		mv ST{params.prefix}.aln ST{params.prefix}.full.aln ST{params.prefix}.tab ST{params.prefix}.vcf ST{params.prefix}.txt ST{params.prefix}.ref.fa {params.outdir}
+		"""
+	
+rule iqtree:
+	input:
+		core = "snippy_core_out/ST{ST}/ST{ST}.aln",
+		full = "snippy_core_out/ST{ST}/ST{ST}.full.aln"
+	output:
+		directory("iqtree_out/ST{ST}")
+	conda:
+		"envs/iqtree_snp-sites.yaml"
+	params:
+		prefix = "ST{ST}"
+	log:
+		"logs/iqtree_ST{ST}.log"
+	threads: 16
+	shell:
+		"""
+		mkdir -p {output} && cd {output}
+		iqtree -fconst $(snp-sites -C ../../{input.full}) -nt AUTO -pre {params.prefix} -s ../../{input.core} 2>&1>../../{log}
+		if [ -f {params.prefix}.treefile ]; then echo "{output}/{params.prefix}.treefile exists"; else exit 1; fi
+		"""
+
+rule clonalframeml:
+	input:
+		tree = "iqtree_out/ST{ST}",
+		aln = "snippy_core_out/ST{ST}/ST{ST}.full.aln"
+	output:
+		directory("clonalframeml_out/ST{ST}")
+	conda:
+		"envs/clonalframeml.yaml"
+	params:
+		prefix = "COMBAT_cfml_ST{ST}",
+		iqtreeprefix = "ST{ST}"
+	log:
+		"logs/clonalframeml_ST{ST}.log"
+	threads: 16
+	shell:
+		"""
+		mkdir -p {output} && cd {output}
+		ClonalFrameML ../../{input.tree}/{params.iqtreeprefix}.treefile ../../{input.aln} {params.prefix} -show_progress true 2>&1>../../{log}
+		if [ -f {params.prefix}.labelled_tree.newick ]; then echo "CFML output exists"; else exit 1; fi
+		"""
+
+rule maskrc:
+	input:
+		aln = "snippy_core_out/ST{ST}/ST{ST}.full.aln",
+		cfml = "clonalframeml_out/ST{ST}"
+	output:
+		"maskrc_out/masked_ST{ST}.aln"
+	conda:
+		"envs/maskrc.yaml"
+	params:
+		prefix = "COMBAT_cfml_ST{ST}"
+	log:
+		"logs/maskrc_ST{ST}.log"
+	shell:
+		"""
+		bash scripts/download_maskrc.sh
+		mkdir -p maskrc_out/
+		cd {input.cfml}
+		python3 ../../maskrc-svg.py --aln ../../{input.aln} --out ../../{output} {params.prefix} 2>&1>../../{log}
+		"""
+
+rule snp_comparison:
+	input:
+		masked_aln = "maskrc_out/masked_ST{ST}.aln",
+		aln = "snippy_core_out/ST{ST}/ST{ST}.full.aln",
+		table = "group_mlst_out/table_mapping_ST{ST}.tsv"
+	output:
+		table = "snp_comparison/snp_table_ST{ST}.tsv",
+		datadir = directory("snp_comparison/data/ST{ST}")
+	conda:
+		"envs/snp_comparisons.yaml"
+	params:
+		ST = "{ST}"
+	log:
+		"logs/snp_comparison_ST${ST}.log"
+	shell:
+		"""
+		mkdir -p {output.datadir}
+		snp-dists -m {input.masked_aln} > {output.datadir}/snps_ST{params.ST}_masked.tsv
+		snp-dists -m {input.aln} > {output.datadir}/snps_ST{params.ST}_normal.tsv
+		scripts/snp-dists-alnlengths -l {input.masked_aln} > {output.datadir}/lengths_ST{params.ST}_masked.tsv
+		scripts/snp-dists-alnlengths -l {input.aln} > {output.datadir}/lengths_ST{params.ST}_normal.tsv
+		python scripts/calculate_scaled_snps.py {output.datadir} {params.ST} {input.table} {output.table}
+		"""
+
+rule combine_SNP_comparison:
+	input:
+		expand("snp_comparison/snp_table_ST{ST}.tsv", ST=STs)
+	output:
+		"snp_comparison/snp_table_all.tsv"
+	log:
+		"logs/combine_SNP_comparison.log"
+	conda:
+		"envs/snp_comparisons.yaml"
+	shell:
+		"""
+		python scripts/combine_SNP_comparison.py --list {input} --output {output} 2>&1>{log}
+		"""
+
+rule combine_data:
+	input:
+		snptable = "snp_comparison/snp_table_all.tsv",
+		metadata = "COMBAT_metadata.tsv",
+		mlst = "mlst_summary.tsv"
+	output:
+		main = "isolate_comparisons.tsv",
+	conda:
+		"envs/snp_comparisons.yaml"
+	params:
+		threshold = config['combine_data']['threshold']
+	log:
+		"logs/combine_data.log"
+	shell:
+		"""
+		python scripts/combine_data.py --mlst {input.mlst} --metadata {input.metadata} --snps {input.snptable} --threshold {params.threshold} --main-output {output.main} --conclusion-output {output.conclusion} 2>&1>{log}
+		"""
+
+rule print_travelers:
+	input:
+		"isolate_comparisons.tsv"
+	output:
+		"travelers_conclusions.tsv"
+	conda:
+		"envs/snp_comparisons.yaml"
+	params:
+		threshold =  config["combine_data"]["threshold"],
+		exclude_st = config["print_travelers"]["exclude"]
+	log:
+		"logs/print_travelers.log"
+	shell:
+		"""
+		python scripts/print_travelers.py --isolate-comparisons {input} --threshold {params.threshold} --exclude-st {params.exclude_st} > {output}
+		"""
+
+rule comparison_phylogroups:
+	input:
+		isolate_comparisons = "isolate_comparisons.tsv",
+		metadata = "COMBAT_metadata.tsv",
+		metadata_controls = "COMBAT_metadata_controls.tsv",
+		phylo_summary = "ezclermont_summary.tsv",
+		phylo_summary_controls = "ezclermont_summary_controls.tsv",
+#		travelers = "traveler_persistence_types_withoutST38.tsv"
+	output:
+		plotdata = "phylogroup_comparison_plotdata.tsv",
+		final = "phylogroup_comparison.tsv"
+	conda:
+		"envs/snp_comparisons.yaml"
+	params:
+		threshold =  config["combine_data"]["threshold"]
+	log:
+		"logs/phylogroup_comparison.log"
+	shell:
+		"""
+		python scripts/phylogroup_comparison.py --isolate-comparison {input.isolate_comparisons} --threshold {params.threshold} --ezclermont {input.phylo_summary} --ezclermont-controls {input.phylo_summary_controls} --metadata-controls {input.metadata_controls} --plot-data-out {output.plotdata} --output {output.final} 2>&1>{log}
+		"""
+
+rule plot_phylogroup_comparison:
+	input:
+		"phylogroup_comparison_plotdata.tsv"
+	output:
+		"phylogroup_comparison.pdf"
+	conda:
+		"envs/snp_comparisons.yaml"
+	log:
+		"logs/plot_phylogroup_comparison.log"
+	shell:
+		"""
+		Rscript scripts/plot_phylogroup_comparison.R {input} {output}
+		"""
+
+rule calculate_expec:
+	input:
+		travelers = "travelers_conclusions.tsv",
+		controls = "COMBAT_metadata_controls.tsv",
+		mlstcontrols = "mlst_summary_controls.tsv",
+		expec = "Manges_ExPEC_lineages.tsv"
+	output:
+		"ExPEC_conclusions.txt"
+	conda:
+		"envs/snp_comparisons.yaml"
+	log:
+		"logs/calculate_expec.log"
+	shell:
+		"""
+		python scripts/calculate_expec.py --input {input.travelers} --expec {input.expec} --controls {input.controls} --mlst-controls {input.mlstcontrols} > {output} 2>{log}
+		"""

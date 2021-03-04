@@ -1,0 +1,120 @@
+configfile: "config.yaml"
+
+# Other ID tuples can be globbed from input dirs
+NANOPORE, = glob_wildcards("raw_nanopore/{id}.fastq.gz")
+
+rule all:
+	input:
+		expand("fastqc_out/{sample}", sample=NANOPORE),
+		expand("ESBL_contigs_annotations/{sample}", sample=NANOPORE),
+
+### NANOPORE DATA
+
+rule filtlong:
+	input:
+		nanopore = "raw_nanopore/{sample}.fastq.gz",
+		fw = "trimmed_illumina/{sample}_1_AT_QT.fastq.gz",
+		rv = "trimmed_illumina/{sample}_2_AT_QT.fastq.gz"
+	output:
+		"trimmed_nanopore/{sample}.fastq.gz"
+	conda:
+		"envs/filtlong.yaml"
+	params:
+		target_bases = config["filtlong"]["target_bases"],
+		keep_percent = config["filtlong"]["keep_percent"]
+	log:
+		"logs/filtlong/{sample}.log"
+	shell:
+		"""
+		filtlong --target_bases {params.target_bases} --illumina_1 {input.fw} --illumina_2 {input.rv} --trim {input.nanopore} | gzip > {output} 2>{log}
+		"""
+
+rule fastqc:
+	input:
+		nanopore = "raw_nanopore/{sample}.fastq.gz"
+	output:
+		directory("fastqc_out/{sample}")
+	conda:
+		"envs/fastqc.yaml"
+	log:
+		"logs/fastqc/{sample}.log"
+	threads: 6
+	shell:
+		"""
+		mkdir -p {output}
+		fastqc -t {threads} --outdir {output} {input} 2>&1>{log}
+		"""
+
+rule unicycler:
+	input:
+		nanopore = "trimmed_nanopore/{sample}.fastq.gz",
+		fw = "trimmed_illumina/{sample}_1_AT_QT.fastq.gz",
+		rv = "trimmed_illumina/{sample}_2_AT_QT.fastq.gz"
+	output:
+		"unicycler_out/{sample}/assembly.fasta"
+	conda:
+		"envs/unicycler.yaml"
+	params:
+		outdir = "unicycler_out/{sample}"
+	log:
+		"logs/unicycler/{sample}.log"
+	threads: 6
+	shell:
+		"""
+		unicycler -1 {input.fw} -2 {input.rv} --long {input.nanopore} -o {params.outdir} --threads {threads} 2>&1>{log}
+		"""
+
+rule amrfinder_nanopore:
+	input:
+		assembly = "unicycler_out/{sample}/assembly.fasta"
+	output:
+		"amrfinder_nanopore_out/{sample}.tsv"
+	conda:
+		"envs/amrfinder.yaml"
+	params:
+		organism = config["amrfinder"]["organism"]
+	log:
+		"logs/amrfinder_nanopore/{sample}.log"
+	threads: 16
+	shell:
+		"""
+		amrfinder -u
+		amrfinder --threads {threads} --nucleotide {input.assembly} --organism {params.organism} --output {output} 2>&1>{log}
+		"""
+
+rule get_ESBL_contigs:
+	input:
+		assembly = "unicycler_out/{sample}/assembly.fasta",
+		amrfinder = "amrfinder_nanopore_out/{sample}.tsv"		
+	output:
+		ESBLcontig = "ESBL_contigs/{sample}.fasta"
+	conda:
+		"envs/snp_comparisons.yaml"
+	log:
+		"logs/get_ESBL_contigs/{sample}.log"
+	shell:
+		"""
+		bash scripts/get_ESBL_contigs.sh {input.amrfinder} 2>&1>{log}
+		"""
+
+rule prokka_ESBL_contigs:
+	input:
+		"ESBL_contigs/{sample}.fasta"
+	output:
+		directory("ESBL_contigs_annotations/{sample}")
+	conda:
+		"envs/prokka.yaml"
+	params:
+		general = config["prokka"]["general"],
+		kingdom = config["prokka"]["kingdom"],
+		genus = config["prokka"]["genus"],
+		species = config["prokka"]["species"],
+		prefix = "{sample}"
+	log:
+		"logs/prokka_ESBL_contigs/{sample}.log"
+	threads: 8
+	shell:
+		"""
+		prokka {params.general} --force --outdir {output} --genus {params.genus} --species {params.species} --kingdom {params.kingdom} --cpus {threads} --prefix {params.prefix} {input} 2>&1>{log}
+		if [ -f {output}/*.ffn ]; then echo "{output} exists"; else exit 1; fi
+		"""
